@@ -137,7 +137,7 @@ setwd("~/R work/R course/Capstone/Movielens")
 saveRDS(edx, "edx.rds")
 saveRDS(final_holdout_test, "final_holdout_test.rds")
 
-edx <- readRDS("~/R work/R course/Capstone/Movielens/edx.rds")
+edx <- readRDS("data/edx.rds")
 
 if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
 if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
