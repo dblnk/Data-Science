@@ -61,83 +61,19 @@ final_holdout_test <- temp %>%
 removed <- anti_join(temp, final_holdout_test)
 edx <- rbind(edx, removed)
 
-rm(dl, ratings, movies, test_index, temp, movielens, removed)
-
-###################
-# QUIZ
-###################
-
-# Q1
-
-dim(edx)[1]
-dim(edx)[2]
-
-# Q2
-
-sum(edx$rating=="0")
-sum(edx$rating=="3")
-
-# or
-edx %>% filter(rating == 3) %>% tally()
-
-# Q3
-length(unique(edx$movieId))
-# or, faster and more concise
-n_distinct(edx$movieId)
-
-# Q4
-length(unique(edx$userId))
-# or, faster and more concise
-n_distinct(edx$userId)
-
-# Q5
-table(edx$genres) %>% knitr::kable()
-genre_count <- tibble(n = table(edx$genres), genre = names(table(edx$genres)))
-genre_count %>% filter(str_detect(genre, "Drama")) %>% summarize(sum_drama = sum(n))
-genre_count %>% filter(str_detect(genre, "Comedy")) %>% summarize(sum_comedy = sum(n))
-genre_count %>% filter(str_detect(genre, "Thriller")) %>% summarize(sum_thriller = sum(n))
-genre_count %>% filter(str_detect(genre, "Romance")) %>% summarize(sum_romance = sum(n))
-
-# provided answer # str_detect
-genres = c("Drama", "Comedy", "Thriller", "Romance")
-sapply(genres, function(g) {
-  sum(str_detect(edx$genres, g))
-})
-# interesting: # separate_rows, much slower!
-#edx %>% separate_rows(genres, sep = "\\|") %>%
-#  group_by(genres) %>%
-#  summarize(count = n()) %>%
-#  arrange(desc(count))
-
-# Q6
-most_rat <- edx %>% group_by(movieId) %>% tally() %>% arrange(-n) %>% top_n(1) %>% pull(movieId)
-edx %>% filter(movieId == most_rat) %>% slice(1) %>% pull(title)
-
-# provided answer
-edx %>% group_by(movieId, title) %>%
-  summarize(count = n()) %>%
-  arrange(desc(count))
-
-# Q7
-edx %>% group_by(rating) %>% tally() %>% arrange(-n) %>% top_n(5)
-# Q8
-edx %>% group_by(rating) %>% tally() %>% arrange(-n) %>% top_n(5)
-#provided answer in addition;
-edx %>%
-  group_by(rating) %>%
-  summarize(count = n()) %>%
-  ggplot(aes(x = rating, y = count)) +
-  geom_line()
+rm(dl, ratings, movies, test_index, temp, movielens, removed, ratings_file, movies_file)
 
 
-
-setwd("~/R work/R course/Capstone/Movielens")
+setwd("/Data-Science/project-movielens")
 #We save the data sets in order to load them directly in the future.
 
-saveRDS(edx, "edx.rds")
-saveRDS(final_holdout_test, "final_holdout_test.rds")
+saveRDS(edx, "/data/edx.rds")
+saveRDS(final_holdout_test, "/data/final_holdout_test.rds")
 
 edx <- readRDS("data/edx.rds")
+
+
+
 
 if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
 if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
