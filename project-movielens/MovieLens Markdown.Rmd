@@ -1,0 +1,1356 @@
+---
+title: "MovieLens rating prediction model - HarvardX Data science Capstone assignment #1"
+author: "edX learner DBel_17"
+date: "March 6th, 2023"
+output:
+  pdf_document: 
+  keep_tex: yes
+header-includes:
+  - \usepackage{float}
+---
+<!-- THE PROJECT IS AVAILABLE UNDER https://github.com/dblnk/Data-Science/tree/master/project-movielens ,
+edx.rds file under https://www.dropbox.com/s/xjopbrd1a3t67s8/edx.rds?dl=0 ,
+train.rds file under https://www.dropbox.com/s/xjopbrd1a3t67s8/edx.rds?dl=0 .
+
+MAKE SURE TO SET THE EVAL ARGUMENT OF THE CHUNKS IN LINES 60 AND 162 TO TRUE, IF YOU HAVE NOT DOWNLOADED "edx.rds", "final_holdout_test.rds", "train.rds" and "test.rds" FILES INTO A data/ DIRECTORY AS CODED IN CHUNK IN LINE 19!!!
+
+Make sure to have LaTeX 'float' and 'tinytex' packages installed when Knitting this document into pdf!
+-->
+```{r Essential-downloads, echo=FALSE, message=FALSE, warning=FALSE}
+dl1 <- "data/edx.rds"
+if(!file.exists(dl1))
+  download.file("https://www.dropbox.com/s/xjopbrd1a3t67s8/edx.rds?dl=0", dl1)
+  
+  dl2 <- "data/train.rds"
+if(!file.exists(dl2))
+  download.file("https://www.dropbox.com/s/xjopbrd1a3t67s8/edx.rds?dl=0", dl2)
+  
+  dl3 <- "data/final_holdout_test.rds"
+if(!file.exists(dl3))
+  download.file("https://github.com/dblnk/Data-Science/blob/master/project-movielens/data/final_holdout_test.rds", dl3)
+  
+    dl4 <- "data/test.rds"
+if(!file.exists(dl4))
+  download.file("https://github.com/dblnk/Data-Science/blob/master/project-movielens/data/test.rds", dl4)
+```
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse=TRUE, fig.pos = 'H', fig.align= 'center', echo = FALSE,  dpi = 72)
+if(!require(lubridate)) install.packages("lubridate", repos = "http://cran.us.r-project.org")
+if(!require(broom)) install.packages("broom", repos = "http://cran.us.r-project.org")
+if(!require(dslabs)) install.packages("dslabs", repos = "http://cran.us.r-project.org")
+if(!require(purrr)) install.packages("purrr", repos = "http://cran.us.r-project.org")
+if(!require(gridExtra)) install.packages("gridExtra", repos = "http://cran.us.r-project.org")
+if(!require(scales)) install.packages("scales", repos = "http://cran.us.r-project.org")
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(tinytex)) install.packages("tinytex", repos = "http://cran.us.r-project.org")
+if(!require(tinytex)) tinytex::install_tinytex()
+if(!require(float)) install.packages("float", repos = "http://cran.us.r-project.org")
+if(!require(tibble)) install.packages("tibble", repos = "http://cran.us.r-project.org")
+```
+
+## INTRODUCTION
+
+MovieLens is an extensive data set containing movie ratings submitted by users of the MovieLens website and curated by the GroupLens research lab, available through <http://grouplens.org>. MovieLens data is a popular resource for training machine learning algorithms to devise recommendation systems. In fact, participants of the MovieLens platform can receive movie recommendations based on the ratings they have provided. Recommendation systems are important tools for streaming and video rental services to keep their users engaged and committed to continued subscription. Thus, company profits depend on robustly performing algorithms which provide users with movie suggestions according to their preferences.
+
+In the present project, we aimed to develop a model that can predict ratings for any given movie by any individual user. MovieLens contains several attributes that can help us predict ratings. In addition to the individual movie and user Ids, we have the movie title, movie release year, movie genre and the date of rating at our disposition:
+```{r MovieLens-Initiate, eval=FALSE, message=FALSE, include=FALSE}
+############### START OF INITIAL CODE PROVIDED BY PROF. IRIZARRY AND HIS TEAM ############### 
+
+##########################################################
+# Create edx and final_holdout_test sets 
+##########################################################
+
+# Note: this process could take a couple of minutes
+
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+
+library(tidyverse)
+library(caret)
+
+# MovieLens 10M dataset:
+# https://grouplens.org/datasets/movielens/10m/
+# http://files.grouplens.org/datasets/movielens/ml-10m.zip
+
+options(timeout = 120)
+
+dl <- "data/ml-10M.zip"
+if(!file.exists(dl))
+  download.file("https://files.grouplens.org/datasets/movielens/ml-10m.zip", dl)
+# If acceesing the URL does not work, please download the file manually by coping the URL and pasting in your web browser. Then unpack it into your working directory into "data" folder.
+
+ratings_file <- "data/ml-10M100K/ratings.dat"
+if(!file.exists(ratings_file))
+  unzip(dl, ratings_file)
+
+movies_file <- "data/ml-10M100K/movies.dat"
+if(!file.exists(movies_file))
+  unzip(dl, movies_file)
+
+ratings <- as.data.frame(str_split(read_lines(ratings_file), fixed("::"), simplify = TRUE),
+                         stringsAsFactors = FALSE)
+colnames(ratings) <- c("userId", "movieId", "rating", "timestamp")
+ratings <- ratings %>%
+  mutate(userId = as.integer(userId),
+         movieId = as.integer(movieId),
+         rating = as.numeric(rating),
+         timestamp = as.integer(timestamp))
+
+movies <- as.data.frame(str_split(read_lines(movies_file), fixed("::"), simplify = TRUE),
+                        stringsAsFactors = FALSE)
+colnames(movies) <- c("movieId", "title", "genres")
+movies <- movies %>%
+  mutate(movieId = as.integer(movieId))
+
+movielens <- left_join(ratings, movies, by = "movieId")
+
+# Final hold-out test set will be 10% of MovieLens data
+set.seed(1, sample.kind="Rounding") # if using R 3.6 or later
+# set.seed(1) # if using R 3.5 or earlier
+test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
+edx <- movielens[-test_index,]
+temp <- movielens[test_index,]
+
+# Make sure userId and movieId in final hold-out test set are also in edx set
+final_holdout_test <- temp %>% 
+  semi_join(edx, by = "movieId") %>%
+  semi_join(edx, by = "userId")
+
+# Add rows removed from final hold-out test set back into edx set
+removed <- anti_join(temp, final_holdout_test)
+edx <- rbind(edx, removed)
+
+rm(dl, ratings, movies, test_index, temp, movielens, removed, ratings_file, movies_file)
+
+############### END OF CODE PROVIDED BY PROF. IRIZARRY AND HIS TEAM ############### 
+
+#We save the data sets in order to load them directly in the future, when restarting the session.
+
+saveRDS(edx, "data/edx.rds")
+saveRDS(final_holdout_test, "data/final_holdout_test.rds")
+rm(edx, final_holdout_test)
+
+```
+
+```{r MovieLens-head, echo=FALSE}
+edx <- readRDS("data/edx.rds")
+set.seed(20)
+edx %>% slice_sample(n=5) %>% knitr::kable(row.names = FALSE, caption = "\\textit{Example of entries in the MovieLens database}")
+```
+The outcomes take discrete values and are characterized by:
+
+```{r MovieLens-rating, echo=FALSE, results='asis'}
+cat("Range of the rating scores: from ",range(edx$rating)[1], " to ", range(edx$rating)[2], "\n\n")
+
+scores <- paste0(sort(unique(edx$rating)), collapse = ", ")
+
+cat("Rating score options: ", scores,".")
+```
+
+In order to build a linear prediction model, we implemented a strategy which begins by assessing the data distribution of individual features in relation to the ratings and then estimates individual effects incrementally. We started by accounting for movie- and user-specific effects and extended this basic model by reducing residuals through the consideration of further predictors, such as genre, year of release or the rating frequency for each movie. Finally, the elaborated model was tested using the provided validation data set.
+
+\newpage
+## METHODS
+
+### Data partitioning  
+
+To independently validate our model, we partitioned the initial "edx" training data set into a further training and test set, using a 80/20 partition.
+```{r edx-Partition, eval=FALSE, message=FALSE, include=FALSE}
+# First we split the edx data into a training (80%) and a validation test set (20%). We will use the training set to derive our model and test the model performance on the test set.
+set.seed(1998)
+test_index <- createDataPartition(edx$rating, times = 1, p = 0.2, list = FALSE)
+train <- edx[-test_index, ]
+temp <- edx[test_index, ]
+
+# verify if all movieId and userId values are present in both train and test sets.
+
+test <- temp %>% 
+  semi_join(train, by = "movieId") %>%
+  semi_join(train, by = "userId")
+
+# Since there are some removed rows, add the removed rows from test set back into the training set.
+removed <- anti_join(temp, test)
+train <- rbind(train, removed)
+
+#Again, we save the split data sets in order to load them directly in the future, when restarting the session.
+# saveRDS(train, "data/train.rds")
+# saveRDS(test, "data/test.rds")
+rm(edx, final_holdout_test)
+
+# train <- readRDS("data/train.rds")
+# test <- readRDS("data/test.rds")
+
+rm(test_index, temp, removed)
+```
+### Data cleaning and processing
+
+The *title* column contains both the movie title and the year of release. The year was extracted using the regex pattern "\\(\\d{4}\\)$" in conjunction with parse_number(). This ensures that only four digit numbers in parentheses and at the end of the string were extracted, since by experience, there are movie titles like "1984" or "2001: A Space Odyssey". The title was tidied by using the pattern "\\s\\(\\d{4}\\)\$" and str_replace().
+
+A list of unique genres was extracted by splitting the *genres* column using the pattern "\\|" and identifying all unique terms with unique().
+
+The *timestamp* column was converted into POSIXct format with as_datetime() and further rounded to weeks via round_date(., unit="week") function.
+
+A new *ratings_pa* feature representing the annual rating rate for a given movie was derived by dividing the amount of ratings a movie has received in the train data set by the years of its existence until the year 2009 and further by the number of rows in the train set. To scale this parameter into a reasonable range, a final multiplication with 10^6 was carried out:
+
+\begin{center} $f_{i} = \frac{S_{i}}{(2009 - y_{i})} * \frac{10^6} {\sum_{i=1}^{N}S_{i}}$,
+
+with $f_{i}$ the annual rating frequency for movie $i$, $S_{i}$ the amount of ratings movie $i$ has received in the training data set, $y_{i}$ the year of release for movie $i$ and N the number of movies in the data set. 
+\end{center}
+
+
+### Data exploration and visualization
+
+Graphs were generated using the *ggplot2* or *base* R packages. Histograms, box plots, scatte rplots and smooth curves were prefered tools to examine the relationship between features and outcomes as well as features and residuals.
+
+### Modeling approach
+
+A linear prediction model was built by starting with one predictor, delineating its effect and then taking the remaining residual error $\epsilon$ and using the next predictor to explain a share of it. As a figure of reference, first, a global mean was calculated by averaging all ratings for a given movie and then averaging the average ratings of all movies:
+
+\begin{center} $\mu = \frac{1}{N}\sum_{i=1}^N\bar{R_{i}}$ 
+
+with $\bar{R_{i}}$ being the average rating of a movie $i$ and $N$ the number of movies contained in the training data. \end{center}
+```{r Global-mean, message=FALSE, include=FALSE}
+# We calculate a global average by first averaging the ratings for each movie and then calculate the overall mean value of the movie averages.
+train <- readRDS("data/train.rds")
+test <- readRDS("data/test.rds")
+global_mean <- train %>% group_by(movieId) %>% summarize(movie_avg = mean(rating)) %>% ungroup() %>% 
+  summarize(global_mean = mean(movie_avg)) %>% pull(global_mean)
+```
+
+Hence, our first premise for the outcome is
+\begin{center} 
+$R_{i,j} = \mu + \epsilon_{i,j}$, 
+
+with $R_{i,j}$ being the true rating and $\epsilon_{i,j}$ the residual error for movie $i$ and user $j$.\end{center}
+
+By sequentially computing movie, user, rating rate per anno, genre, year of release, review date and user's genre preference effects, the residuals were minimized.
+
+Movie and user effects were calculated by averaging residual errors per movie and per user, respectively. The movie effect $m_{i}$ for movie $i$, as the first effect estimate, was thus distilled by following formula:
+
+\begin{center} $m_{i} = \frac{1}{S_{i}}\sum_{s=1}^{S_{i}}{(R_{i} - \mu)}$, 
+
+with $S$ being the number of ratings for movie $i$ in the training data set.  \end{center}
+
+User effects $u_{j}$ were computed analogously, but after subtracting the already calculated $m_{i}$ effect. 
+
+Rate per anno, year of release and review data effects were modeled with the help of the loess() (locally estimated scatterplot smoothing) function after optimizing span.
+
+Most movies have several genres attributed to them. We assumed that the effect of each assigned genre contributes equally to the final genre bias effect for each movie. Therefore, genre effects on residual errors were estimated by, first, averaging movie ratings in each available genre category separately, to obtain the effect $g_{k}$ for each genre $k$. Then, a joint genre effect for each movie with genre assignments $k...K$ was computed by averaging the effects $g_{k}$ to obtain a movie-individual genre effect $g_{i}$.
+
+\begin{center} $g_{i}=\frac{1}{K_{i}}{\sum_{k=1}^{K_{i}}g_{k}}$,  
+with $K_{i}$ being the number of genres movie $i$ is assigned to. \end{center}
+
+The effect of each user's preferences for genres was estimated by averaging the residuals in the ratings of each individual user for all the available 18 genres (set to 0 if any genre was not rated at all by a particular user), yielding a user/genre interaction effect estimate $g_{j,k}$ for user j and genre k. Then the user/genre effect was extrapolated to a particular movie categorized into genres $k$ by averaging all applicable $g_{j,k}$ to yield the final user/genre estimate for movie $i$ --- $g_{j,i}$:
+
+\begin{center} $g_{j,k}=\frac{1}{T_{k}}{\sum_{t_{k}=1}^{T_{k}}\epsilon_{j,ik}}$,  
+with $T_{k}$ being the amount of ratings user $j$ has submitted for movies in genre $k$ and $\epsilon_{j,ik}$ the residual for user's $j$ rating of movie $i$ categorized in genre $k$
+
+and
+
+$g_{j,i}=\frac{1}{K_{i}}{\sum_{k=1}^{K_{i}}g_{j,k}}$
+\end{center}
+
+Regularization attempts were applied to the estimations of all effects, by testing a range of tuning parameter values on the test set. Optimal tuning parameters served to derive final effect estimates. For the movie effects, for instance, this was accomplished using the formula:
+
+\begin{center}$m_{i} = \frac{1}{{S_{i}}+\lambda}\sum_{s=1}^{S_{i}}{(R_{i} - \mu)}$,
+
+with tuning parameter $\lambda$. \end{center}
+
+The final model is a linear model with several loess-estimated effects:
+
+\begin{center}$R_{i,j} = \mu + m_{i} + u_{j} + a_{i} + g_{i} + y_{i} + d_{w} + g_{j,i} +\epsilon_{i,j}$,
+
+with $u_{j}$  the user-specific effect for user $j$, $a_{i}$ the loess estimate for the effect of the annual rating rate for movie $i$, $y_{i}$ the loess estimate of the release year effect for movie $i$, $d_{w}$ the loess estimate of the rating date effect for week $w$, $g_{j,i}$ the composite effect of user's {j} preference for movie's {i} genre categorization, and  $\epsilon_{i,j}$ the remaining residual error for movie $i$ and user $j$. \end{center}
+
+
+### Assessing model performance
+
+We used the root mean squared error (RMSE) as the loss function to quantify the remaining residuals and assess the performance of the estimates on the test set, and at very last on the final holdout validation test set.
+```{r RMSE, include=FALSE}
+RMSE <- function(true_r, predicted_r){
+  sqrt(mean((true_r - predicted_r)^2))
+}
+```
+
+### Data clipping
+
+Ratings take discrete values in *0.5* intervals. The numeric range of our continuous rating predictions is not restrained, however. Therefore, final prediction values were capped and the optimal capping floor and ceiling values in the range of the observed rating scores were computed using the loss function.
+
+\newpage
+## RESULTS
+
+### Estimation of movie effect
+Since the quality of a movie should have the largest effect on its rating, we first decided to derive a measure of how a movie, the subject of the rating, influences the review score. Naively put, are there movie effects? We examined the ratings distribution after averaging the ratings for each movie.  
+
+```{r Movie-ratings, fig.cap='Movie statistics', results='asis', out.height='30%', echo=FALSE, warning=FALSE, message=FALSE}
+#train <- readRDS("data/train.rds")
+ds_theme_set()
+temp <- train %>% group_by(movieId) %>% summarize(avg_rating = mean(rating), n = n())
+
+p1 <- temp %>%
+  ggplot(aes(avg_rating))+
+  geom_histogram()+
+  geom_vline(xintercept=global_mean, color = "blue")+
+  geom_text(aes(x=1.8, y=1200, label=paste0("Overall average =",signif(global_mean, digits=3))), size=3, color="blue")+
+  xlab("Average movie rating")+
+  ylab("Count")+
+  ggtitle("Distribution of movie ratings")+
+  theme(plot.title = element_text(hjust=0.5, size=10))
+
+# How many reviews do the movies receive?
+p2 <- temp %>%
+  ggplot(aes(sqrt(n)))+
+  geom_histogram()+
+  geom_vline(aes(xintercept=median(sqrt(n))), color = "blue")+
+  geom_text(aes(x=40, y=3400, label=paste0("Median = ",signif(median(sqrt(n)),digits=3))), size=3, color="blue")+
+  xlab("Sqrt(ratings per movie)")+
+  ylab("Count")+
+  ggtitle("Number of ratings per movie")+
+  theme(plot.title = element_text(hjust=0.5, size=10))
+
+grid.arrange(p1, p2, nrow =1) #%>% knitr::caption = "\\textit{Example of entries in the MovieLens database}"
+
+```
+
+
+Movie ratings show a slightly skewed, right-sided distribution, with `r percent (mean(temp$avg_rating >= global_mean), accuracy=0.1)` of all movie ratings scoring above overall average rating (Fig. 1, left). It is also obvious that most of the movies received less than 10 ratings (Fig. 1, right). Therefore estimating their average rating from the opinion of only a few users might not be very robust. Regularization was applied to introduce a penalty for low amount of ratings.
+We started building our model by adding a movie effect $m_i$ for movie $i$, equal to its average rating $\bar{R_{i}}$ minus the global mean $\mu$ and regularize the effect by the amount of reviews that a movie has received to avoid over- or underestimation of rarely rated movies. \begin{center} $\bar{R_{i}} = \mu + m_{i} + \epsilon_{i}$,  
+with $\epsilon_{i}$ being the residual for movie $i$. \end{center}
+
+We calculated the movie effect estimate (with the inherent remaining residual) by subtracting  $\mu$ from $\bar{R_{i}}$. We also defined a tuning parameter $\lambda$ to penalize predictions of rarely reviewed movies. We probed a range of $\lambda$  and examined which value of $\lambda$  minimizes the RMSE of the prediction in the test set.  
+
+```{r Movie-effect-Regul, fig.cap='Movie effect regularization',  out.height='30%', echo=FALSE, results='asis', warning=FALSE}
+
+l <- seq(0, 10, 1)
+movie_rmses <- sapply(l, function(l){
+  m_i <- train %>% group_by(movieId) %>% 
+    summarize(m_i = sum(rating - global_mean)/(n() + l))
+  r_hat <- test %>% # r_hat is our new predicted rating
+    left_join(m_i, by="movieId") %>% 
+    mutate(r_hat = global_mean + m_i) %>% pull(r_hat)
+  RMSE(test$rating, r_hat)
+})
+plot(l,movie_rmses, xlab= "lambda", ylab="RMSE", mgp=c(1.7,0.5,0))
+# A tuning parameter l of 5 seems to be optimal. And our RMSE is decreased by 0.164! Now it is 0.943.
+
+# Now we will add the movie effects to our train and test data sets, using the tuning parameter of 5.
+m_i <- train %>% group_by(movieId) %>% 
+  summarize(m_i = sum(rating - global_mean)/(n() + 5))
+train <- train %>% left_join(m_i, by="movieId")
+test <- test %>% left_join(m_i, by="movieId")
+
+movie_rmse <-RMSE(test$rating, (global_mean + test$m_i))
+global_mean_rmse <- RMSE(test$rating, global_mean)
+# paste0("RMSE with movie effects: ",signif(movie_rmse, digits=7))
+```
+
+
+A $\lambda$ value of `r l[which.min(movie_rmses)]` was found to be optimal (Fig. 2). The RMSE obtained when using $\mu$ as the sole predictor dropped from `r signif(global_mean_rmse, digits= 5)` to `r signif(movie_rmse, digits=5)` by `r signif(global_mean_rmse - min(movie_rmses), digits=3)` when accounting for movie-spefiic effects.
+
+### Estimation of user effect
+Next, we considered the effects of subjective rating based on user identity. How does the perception of the individual influence their judgement? We obtained the distributions of the users' average ratings and the amount of ratings each user has submitted.
+
+```{r User-ratings, fig.cap='User statistics', fig.align='center',  out.height='30%', echo=FALSE, return='asis', warning=FALSE, message=FALSE}
+temp <- train %>% group_by(userId) %>% summarize(avg_user_rating = mean(rating), n = n())
+
+#The average rating per user
+p3 <- temp %>%
+  ggplot(aes(avg_user_rating))+
+  geom_histogram()+
+  geom_vline(xintercept=global_mean, color = "blue")+
+  geom_text(aes(x=2.0, y=10000, label="Overall movie average"), size=3, color="blue")+
+  xlab("Average user rating")+
+  ylab("Count")+
+  ggtitle("Distribution of user ratings")+
+  theme(plot.title = element_text(hjust=0.5, size=10))
+
+# How many ratings does each user distribute
+p4 <- temp %>%
+  ggplot(aes(n))+
+  scale_x_continuous(trans="log2", breaks=c(4,8,16,32,64,128,256,512,1024,2048))+
+  geom_histogram()+
+  geom_vline(aes(xintercept=median(n)), color = "blue")+
+  geom_text(aes(x=120, y=6500, label=paste0("Median = ",signif(median(n),digits=3))), size=3, color="blue")+
+  xlab("Ratings per user)")+
+  ylab("Count")+
+  ggtitle("Number of ratings per user")+
+  theme(plot.title = element_text(hjust=0.5, size=10))
+
+grid.arrange(p3, p4, nrow=1)
+```
+
+Interestingly, the average ratings per user are very favorable, with `r percent(mean(temp$avg_user_rating >= global_mean), accuracy=0.1)` of users rating above $\mu$ on average (Fig. 3, left). We might therefore be able to identify the smaller subset of users that are more critical of movies in general and account for their demanding taste, but also those who enjoy movies much more than the average. Half of the users have submitted more than 50 ratings (Fig. 3, right). This implies that we might be able to make robust predictions for most of individual user's tendencies.  
+At last, we looked at how users' average rating relates to the amount of ratings they have delivered at the top and bottom 15% of the rating distribution
+
+```{r User-behaviour, fig.cap='User activity vs. average user rating', fig.align='center',  out.width='60%', echo=FALSE, warning=FALSE, message=FALSE}
+quants <- quantile(temp$avg_user_rating, probs = c(0.15, 0.85))
+
+p5 <- temp %>% filter(avg_user_rating < quants[1] | avg_user_rating > quants[2]) %>% 
+  ggplot(aes(avg_user_rating, sqrt(n), color=sqrt(n)))+
+  geom_point(aes(size=n), alpha=0.2)+
+  scale_color_gradient(low="darkblue", high="magenta")+
+  xlab("Average user rating")+
+  ylab("Sqrt(number (n) of ratings per user)")+
+  ggtitle("Number of ratings per user vs. average rating per user")+
+  theme(plot.title = element_text(hjust=0.5))
+p5
+```
+
+
+More extreme raters usually submitted only relatively few reviews and the frequent raters have average ratings much closer to the global mean (Fig. 4). Therefore we also needed to penalize low rating activity by regularization of the user effect, as otherwise we might under- or overestimate the predicted rating for a movie.
+We are expanding our model by a user effect $u_{j}$ for user $j$:
+
+\begin{center} $R_{i,j} = \mu + m_{i} + u_{j} + \epsilon_{i,j}$ \end{center}  
+Our estimate for $u_{j}$ is therefore:
+\begin{center} $ \hat{u}_{j}= R_{i,j} - \mu - m_{i} $ \end{center}  
+Further we regularize the effect by the amount of reviews that this user has contributed to the train set.
+
+```{r User-effect-Regul, fig.cap='User effect regularization', fig.align='center',  out.height='30%',echo=FALSE, results='asis', warning=FALSE}
+l <- seq(0, 10, 1)
+user_movie_rmses <- sapply(l, function(l){
+  u_j <- train %>% group_by(userId) %>% 
+    summarize(u_j = sum(rating - global_mean - m_i)/(n() + l))
+  r_hat <- test %>% 
+    left_join(u_j, by="userId") %>% 
+    mutate(r_hat = global_mean + m_i + u_j) %>% pull(r_hat)
+  RMSE(test$rating, r_hat)
+})
+
+plot(l,user_movie_rmses, xlab= "lambda", ylab="RMSE", mgp=c(1.7,0.5,0))
+
+# A tuning parameter l of 5 is optimal to minimize the RMSE by another 0.0777 points! Now it is 0.8654.
+
+# Now we will add the user effects to our train and test data sets, using the tuning parameter of 5.
+u_j <- train %>% group_by(userId) %>% 
+  summarize(u_j = sum(rating - global_mean - m_i)/(n() + 5))
+
+train <- train %>% left_join(u_j, by="userId")
+
+test <- test %>% left_join(u_j, by="userId")
+
+#Current RMSE considerung user and movie effects to explain the residuals of the predicted rating (approximated by the global mean):
+user_movie_rmse <- RMSE(test$rating, (global_mean + test$m_i + test$u_j))
+```
+
+
+A $\lambda$ value of `r l[which.min(user_movie_rmses)]` was found to be optimal (Fig. 5). The RMSE dropped from `r signif(movie_rmse, digits= 5)` to `r signif(user_movie_rmse, digits=5)` by `r signif(movie_rmse - user_movie_rmse, digits=3)` when adding user- to the
+movie-specific effects.
+
+### Annual rating rate effect  
+To explain residual error after estimating movie and user effects, we computed how many ratings each movie has received per year (year after last rating date minus release year), and divided the resulting annual rating rate by the size of the database, i.e. the total amount of reviews (we called this feature $f_{i}$, see Methods/Data cleaning section). The measure of how often a movie is rated allows the extrapolation to how often it is being watched and therefore how popular it is, as well as how reliable the ratings are (considering the central limit theorem).
+
+```{r Rating-rate, fig.cap='Residuals vs. annual rating rate', fig.align='center', out.width='60%', echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+#To consider time-dependent effects we first need to extract the year of release from the movie title (-> year), we will also clean up the title by removing the year and create a rating date from the timestamp (-> rating_date), in both training and test data sets.
+
+train <- train %>% mutate(year = parse_number(str_extract(title, "\\(\\d{4}\\)$")), 
+                          title = str_replace(title, "\\s\\(\\d{4}\\)$", ""),
+                          rating_date = as_datetime(timestamp)) 
+test <- test %>% mutate(year = parse_number(str_extract(title, "\\(\\d{4}\\)$")), 
+                        title = str_replace(title, "\\s\\(\\d{4}\\)$", ""),
+                        rating_date = as_datetime(timestamp)) 
+
+# We start by taking into consideration how many ratings each movie has received per year (last review date minus release year), and divide this annual rating rate by the size of the database, i.e. the total amount of reviews (we will call this feature "ratings_pa"). This will allow using this parameter when analyzing other data sets with different sizes. The measure of how often a movie is rated allows the extrapolation to how often it is being watched and therefore how popular it is, as well as how reliable the ratings are (considering the central limit theorem here).
+range <- range(train$year)
+# We will take 2009 as the cutoff year, since 2008 is the year of the last released movie in our data set and we cannot divide by 0. We will multiply by a scaling factor of 10^6 to obtain reasonable decimals.
+
+# Calculating rating frequency and store in a new data frame
+train_ratings_pa <- train %>% group_by(movieId) %>% 
+  summarize(ratings_pa = n()/(range[2]+1-year[1])/dim(train)[1]*10^6, avg_rating=mean(rating))
+
+# Let's visualize if our assumption seems reasonable by plotting our current rating residual against the rating frequency.
+p6 <- train %>% group_by(movieId) %>% 
+  summarize(ratings_pa = n()/(range[2]+1-year[1])/dim(train)[1]*10^6, rating_residual = mean(rating - global_mean - m_i - u_j), n=n()) %>%
+  ggplot(aes(sqrt(ratings_pa), rating_residual)) +
+  geom_jitter(aes(color=sqrt(n)), alpha=0.4)+
+  geom_smooth(method="loess", span=0.3, method.args=list(degree=1))+
+  ylab("Rating residual (post movie & user effects)")+
+  xlab("Sqrt(Normalized ratings per year)")+
+  ggtitle("Movie residuals vs. rating frequency")+
+  geom_hline(yintercept=0, color="black", alpha=0.7)+
+  scale_color_gradient(low="grey", high="blue")+
+  labs(color = "Sqrt(n p. movie)")+
+  theme(plot.title = element_text(hjust=0.5))
+p6
+```
+
+
+We took 2009 as the cutoff year as the years of release range from `r range(train$year)[1]` to `r range(train$year)[2]`. We plotted the remaining residuals against  $f_{i}$ (Fig. 6) observing that movies with low rating frequencies tend to have positive residuals (Fig. 6), suggesting that we underestimated their ratings. In contrast, the residuals for very frequently rated movies were very low showing that the present state of the model was able to make a robust prediction for these items (Fig. 6). We might still improve our estimate by accounting for low values of the $f_{i}$ feature. 
+
+```{r Loess-rating-freq, echo=FALSE, message=FALSE, warning=FALSE}
+# Let's build a loess predictor for the residual vs. ratings per year, and optimize span, using RMSE on the test set as an indicator of how the span affects our estimates.
+#span <- seq(0.05, 0.5, 0.05)
+# rmses_ratingrate_loess <- sapply(span, function(s){
+  
+#  loess_ratingrate <- train %>% 
+#    group_by(movieId) %>% 
+#    summarize(ratings_pa = n()/(range[2]+1-year[1])/dim(train)[1]*10^6, avg_rating=mean(rating), m_i=m_i[1], u = mean(u_j), rating_residual = avg_rating - global_mean - m_i - u) %>% 
+#    loess(rating_residual ~ ratings_pa, ., span=s, degree=1)
+  
+#  data <- test %>% 
+#    group_by(movieId) %>% 
+#    summarize(ratings_pa = n()/(range[2]+1-year[1])/dim(test)[1]*10^6, avg_rating=mean(rating), m_i=m_i[1], u = mean(u_j), rating_residual = avg_rating - global_mean - m_i - u)
+  
+#  r_hat <- predict(loess_ratingrate, newdata=data)
+  
+#  RMSE(data$avg_rating, (r_hat + data$m_i + data$u + global_mean))
+#}
+#)
+# plot(span, rmses_ratingrate_loess)
+# span[which.min(rmses_ratingrate_loess)]
+
+# We will use a span of 0.2 to compute the loess function
+
+loess_ratingrate <- train %>% group_by(movieId) %>% 
+  summarize(ratings_pa = n()/(range[2]+1-year[1])/dim(train)[1]*10^6,  avg_rating=mean(rating), m_i=m_i[1], u = mean(u_j), rating_residual = avg_rating - global_mean - m_i - u) %>% 
+  loess(rating_residual ~ ratings_pa, ., span=0.2, degree=1)
+
+# Let's obtain the per year ratings effect rate_pa_i for a movie i over a range of observed values, rounded to integers. We substitute 0 with 0.01 to obtain a non-NA value.
+rate_pa_i <- predict(loess_ratingrate, c(0.01, 1:round(max(train_ratings_pa$ratings_pa))))
+
+# Now we construct a function that pulls the rate_pa_i residual effects and adds them to the global mean, movie and user effects and try to regularize the model with a rating_pa_strata size parameter, reflective of how many movies fall into each integer of the rounded rating_pa feature.
+
+ratings_pa_strata <- train_ratings_pa %>% mutate(ratings_pa_int = round(ratings_pa)) %>% group_by(ratings_pa_int) %>% summarize(n=n()) 
+
+# Assign all possible strata to the values in rate_pa_i as vector entry names.
+names(rate_pa_i) <- 0:round(max(train_ratings_pa$ratings_pa))
+# Construct a vector storing the actual strata sizes and name the entries with the observed integers
+ratings_pa_int_sizes <- ratings_pa_strata$n
+names(ratings_pa_int_sizes) <- ratings_pa_strata$ratings_pa_int
+
+# Let's add the rating_pa feature to the train  data sets.
+train <- train %>% left_join(train_ratings_pa, by="movieId")
+
+# Then we define a function to assign a rating_pa residual to each stratum w in the train$ratings_pa vector and examine if regularization by stratum size has any impact on our loss.
+# Choose the tuning parameter
+#l <- seq(0, 2.5, 0.25)
+# Build the function
+# rating_pa_model_rmses <- sapply(l, function(l){
+  # Use the named rate_pa_i vector to look up the values for each rating_pa stratum and the ratings_pa_int_sizes vector to estimate yearly movie rating size for that stratum for regularization
+ # values <- rate_pa_i[as.character(round(train_ratings_pa$ratings_pa))]
+ # sizes <- ratings_pa_int_sizes[as.character(round(train_ratings_pa$ratings_pa))]
+  # unname the values and sizes vectors
+  #values <- unname(values)
+#  sizes <- unname(sizes) 
+  #Add a rate_pa_i column to the train data set, regularize with the tuning parameter l and then join it to the test set.
+#  train_bymovie <- train %>% group_by(movieId) %>% summarize(ratings_pa=ratings_pa[1]) %>% mutate(rate_pa_i = values*sizes/(sizes+l))
+  
+#  test <- train_bymovie %>% select(movieId, rate_pa_i) %>% right_join(test, by="movieId", multiple="all")
+  # Calculate the RMSE on the test set.
+#  rating_pa_reg_rmses <- RMSE(test$rating, (global_mean + test$rate_pa_i + test$m_i + test$u_j))
+#  rating_pa_reg_rmses
+#}
+#)
+# rating_pa_model_rmses
+# plot(l, rating_pa_model_rmses)
+# l[which.min(rating_pa_model_rmses)]
+# user_movie_rmse - min(rating_pa_model_rmses)
+
+# Regularization does not benefit, for the very reason that movies with few ratings per year make up more than 50% of all movies, but have a positive ratings_pa estimate.
+
+# We therefore simplify the model and obtain a RMSE value without any regularization:
+
+values <- rate_pa_i[as.character(round(train_ratings_pa$ratings_pa))]
+values <- unname(values)
+
+train_rate_pa_i <- train %>% group_by(movieId) %>% summarize(ratings_pa =ratings_pa[1]) %>% mutate(rate_pa_i = values)
+train <- train_rate_pa_i %>% select(movieId, rate_pa_i) %>% right_join(train, by="movieId", multiple="all")
+test <- train_rate_pa_i %>% select(movieId, rate_pa_i) %>% right_join(test, by="movieId", multiple="all")
+
+# Calculate the RMSE on the test set.
+rating_pa_user_movie_rmse <- RMSE(test$rating, (global_mean + test$rate_pa_i + test$m_i + test$u_j))
+
+
+```
+
+
+We applied the loess() function to estimate the effect $a_{i}$ for the nearest integer of $f_{i}$, using an optimal span of 0.2. Since low rating rates correlated with positive residuals, regularization was not effective here. Assigning the effect estimate $a_{i}$ to each movie $i$ resulted in a RMSE of `r signif(rating_pa_user_movie_rmse, digits=5)`, a further improvement by `r format(user_movie_rmse - rating_pa_user_movie_rmse, scientific=FALSE, digits=2)` over the movie-user model.
+
+### Genre effect
+
+We continued by examining if the updated residuals (after accounting for movie, user and rating frequency effects) could be explained by genre. At first, we filtered for those movies that have only one genre assigned. This allowed us to avoid the genre assignment ambiguities of many of the entries and explore if unambiguous, singular genre assignments have an influence on the residual errors. 
+```{r Genre-single, fig.cap='Residuals vs. definite genre assignments', fig.align='center', out.width='75%', echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+# We will continue by examining if our current residuals (after accounting for movie, user and rating frequency effects) can be explained by genre.
+
+# We want to extract the single genres that the movies are associated with. At first, we want to look at those movies that have only one genre assigned. This allows us to avoid the genre assignment ambiguities of many of the entries and explore if unambiguous, singular genre assignments have an influence on the rating outcome. 
+# set.seed(2018)
+# train %>% select(genres) %>% slice_sample(n=10)
+#We see that the genres of each movie are separated by a "|" symbol. We will use the regex expression "\\|" to remove    all categories that contain any "|".
+
+# Let's look at how the ratings are distributed across the unambiguous genre categories. We will average the ratings that each movie has received. And we will order the factor levels of genre by the ascending order of the median average rating residuals.
+med_genre_rating <- train %>% 
+  filter(!str_detect(genres, "\\|")) %>%
+  group_by(movieId) %>% 
+  summarize(avg_rating = mean(rating), avg_residual=mean(rating-global_mean - m_i - u_j - rate_pa_i), genre = genres[1]) %>% group_by(genre) %>%
+  summarize(med_genre_rating = median(avg_rating), med_genre_residual = median(avg_residual), n = n()) %>% mutate(genre = reorder(genre, med_genre_residual)) 
+med_genre_rating <- med_genre_rating[-1,] # removed "(no genres listed)"
+
+p7 <- train %>% filter(!str_detect(genres, "\\|")) %>% filter(genres != "(no genres listed)") %>%
+  group_by(movieId) %>% 
+  summarize(avg_rating = mean(rating), genre = genres[1], avg_residual=mean(rating-global_mean - m_i - u_j - rate_pa_i)) %>%
+  mutate(genre = factor(genre, levels=levels(med_genre_rating$genre))) %>%
+  ggplot(aes(genre, avg_residual)) + 
+  geom_jitter(alpha=0.2, size=1)+
+  geom_boxplot(outlier.shape = NA, color="blue") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  ylab("Average residual per movie")+
+  xlab("Genre (unique only)")+
+  ggtitle("Residuals (post movie, user & rate_pa effects) vs. Genre")+
+  geom_hline(yintercept=0, color="black")+
+  theme(plot.title = element_text(hjust=0.5, size=10))
+p7
+
+rm(temp, train_rate_pa_i, loess_ratingrate, p1,p2,p3,p4,p5,p6, ratings_pa_strata, train_ratings_pa, movie_rmses, quants, range, ratings_pa_int_sizes, rmses_ratingrate_loess, values, user_movie_rmses)
+```
+
+When analyzing the distribution of average movie rating residuals across categories (Fig. 7), it was evident that genres like "Children" or "Fantasy" are made up of only a few movies, hence they are likely to be rarely the only genre attributes. Therefore, it wouldn't be possible to reliably estimate the effects of a singular genre for most genres. However, to make a general case, we explored if there were any significant differences between categories that are sufficiently crowded (n>50), i.e. "Horror", "Sci-Fi", "Action", Comedy", "Thriller", "Western", "Drama" and "Documentary". After asserting that the data is not normally distributed, we applied a pairwise Wilcoxon-test with multiple testing correction by the Benjamini-Hochberg method.
+
+```{r Genre-single-crowded, fig.cap='Residuals vs. definite genres (n>50)', fig.align='center', out.width='60%', echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+genre_crowded <- train %>% filter(!str_detect(genres, "\\|")) %>% filter(genres != "(no genres listed)") %>%
+  group_by(movieId) %>% 
+  summarize(genre = genres[1]) %>%
+  mutate(genre = factor(genre, levels=levels(med_genre_rating$genre))) %>%
+  group_by(genre) %>% tally() %>% arrange(desc(n)) %>% filter(n>=50) %>%pull(genre)
+
+# Create a data.frame that can be used for statistical analysis and visualization.
+stats <- train %>% filter(!str_detect(genres, "\\|")) %>% filter(genres != "(no genres listed)") %>%
+  group_by(movieId) %>% 
+  summarize(avg_rating = mean(rating), avg_residual=mean(rating-global_mean - m_i - u_j - rate_pa_i), genre = genres[1]) %>%
+  mutate(genre = factor(genre, levels=levels(med_genre_rating$genre))) %>% filter(genre %in% genre_crowded)
+
+# Let's plot the selected genres.
+stats %>%
+  ggplot(aes(genre, avg_residual)) + 
+  geom_jitter(alpha=0.2, size=1)+ #we limit the number of points shown 
+  geom_boxplot(outlier.shape = NA, color="blue") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  ylab("Average residual per movie")+
+  xlab("Genre (unique only)")+
+  ggtitle("Residuals (post movie, user & rate_pa effects) vs. Genre")+
+  geom_hline(yintercept=0, color="black")+
+  theme(plot.title = element_text(hjust=0.5, size=10))
+```
+\newpage
+```{r Genre-statistics, echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+#First we check for normality
+# stats %>%
+#  group_by(genre) %>%
+#  summarize(test = list(shapiro.test(avg_residual)),
+#            pvalue = test %>% map_dbl("p.value"),
+#            normality = ifelse(pvalue > 0.05, "normal", "not normal")) 
+# the assumption of normality is violated for all genres. Therefore we are using the non-parametric Wilcoxon rank-sum test to assess statistical significane of the genre differences.
+wilcox_results <- pairwise.wilcox.test(stats$avg_residual, stats$genre,
+                     p.adjust.method= "BH")
+# Extract p-values and save them into a data frame
+p_values <- tidy(wilcox_results, p.value = "p.value") %>%
+  pivot_wider(names_from = group1, values_from = p.value) %>%
+  column_to_rownames(var = "group2")
+# Display p-values in a table
+knitr::kable(p_values, caption = "Pairwise Wilcoxon test p-values")
+```
+
+As can be seen in Table 2, the majority of comparisons, except for, e.g., "Action vs. Horror", "Sci-Fi vs Action" or "Comedy vs. Thriller" have a significant *p*-value < 0.05. We conclude that genre differences have significant effects on current model's movie rating residuals, with some genres, like Sci-Fi, having lower than 0 and some, such as Documentary, higher than 0 median residuals.
+
+To compute a quantitative term $g_{k}$ for how much any genre $k$ influences the rating, we reiteratively filtered for genre assignments to contain each of the available genres (except for the rarely attributed non-genre term "IMAX") separately, and then grouped by movieId. I.e., if a movie is categorized as both "Fantasy" and "Action", it will contribute to the effect estimates within both "Fantasy" and "Action" genres. We then averaged the per movie rating residuals in the train data to obtain a genre effect estimate $g_{k}$ for any genre $k$.
+
+```{r Genre-effect-plot, fig.cap='Average residuals per genre with 95\\% confidence intervals', fig.align='center', out.width='75%', echo=FALSE, message=FALSE, warning=FALSE}
+avg_mov_rating <- train %>% 
+  group_by(movieId) %>% 
+  summarize(avg_rating = mean(rating), genre = genres[1], n=n())
+
+# Obtain all possible genres from genre column of avg_mov_rating
+genre_list <- str_split(avg_mov_rating$genre, "\\|")
+unique_genres <- sort(unique(unlist(genre_list))) # identify unique genres and sort alphabetically
+# unique_genres # the vector contains a "(no genres listed)" and an "IMAX" genre. IMAX is not a genre, but a film format. Only few movies have it assigned.
+n_IMAX <- avg_mov_rating %>% filter(str_detect(genre, "IMAX")) %>% tally() 
+# We will get rid of "(no genres listed)" and "IMAX" genre entries.
+
+unique_genres <- unique_genres[-c(1, which(unique_genres == "IMAX"))]
+
+# Construct a function to filter the training data for each of the genre terms and calculate the average residual per genre with their 95% confidence interval. Save these in a list called gs.
+gs <- sapply(unique_genres, function(x){
+  train %>% filter(str_detect(genres, x)) %>% 
+    group_by(movieId) %>% 
+    summarize(avg_residual=mean(rating -  global_mean  - m_i - u_j - rate_pa_i)) %>%
+    ungroup() %>% 
+    summarize(g = mean(avg_residual), genre = x, lower = g - 1.96*sd(avg_residual)/sqrt(n()), upper = g + 1.96*sd(avg_residual)/sqrt(n()), n = n())
+}
+)
+
+# Convert the resulting list gs into a data frame g with values g_k for each genre and confidence intervals
+g <- gs %>% unlist() %>% data.frame(genre = .[seq(2,90,5)], g = as.numeric(.[seq(1,90,5)]), lower = as.numeric(.[seq(3,90,5)]), upper = as.numeric(.[seq(4,90,5)]), n= as.numeric(.[seq(5,90,5)])) %>% select(-1) %>% slice(1:18)
+
+#Let's plot the genres against average rating residuals per movie
+p8 <- g %>% mutate(genre = reorder(genre, g)) %>% 
+  ggplot(aes(genre,g, ymin=lower, ymax=upper))+
+  geom_point(aes(size=n),  alpha=0.5)+
+  scale_size(range =c(0.3,3))+
+  geom_errorbar()+
+  geom_hline(yintercept = 0.0)+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  ylab("Average rating residual per genre")+
+  xlab("Genre (multiple per movie possible)")+
+  ggtitle("Residuals (post movie, user & rate_pa effects) vs. Genres")+
+  geom_hline(yintercept=0, color="black")+
+  labs(size="Movies (n)")+
+  theme(plot.title = element_text(hjust=0.5, size=10))
+p8
+```
+
+As can be seen in Fig. 9, e.g. Horror and Action movies associated with negative residuals, implying overestimation by our current model, while Documentaries, War or Film-Noir movies have the most positive rating residuals, implying underestimation by our current model. It can also be seen that the ranking of the categories is quite well preserved when comparing to ranking of genres when we filtered for movies that had only one genre assigned to them (Fig. 8). Therefore, it is reasonable to assume that filtering single genres from combinations of genres to deduct the influence of any single genre is reliable enough.
+
+Now we will incorporate the genre effects into our model:
+
+\begin{center} $R_{i,j} = \mu + m_{i} + u_{j} + a_{i} + g_{i} + \epsilon_{i,j}$ \end{center}  
+
+We averaged the effect estimate for each genre that a movie is assigned to (as described in Methods/Modeling approach), in order to obtain $g_{i}$, and examined if regularization for the size of the genre category in the training set had a beneficial effect.
+
+```{r Genre-effects_Regul, echo=FALSE, fig.align='center', fig.cap='Regularization of genre effects', message=FALSE, warning=FALSE, out.width='50%', results='asis'}
+# Pull the genre estimates and name the vector values with their corresponding genres
+genre_values <- g$g
+names(genre_values) <- g$genre
+# Pull the genre category sizes into a separate vector and equally name them.
+genre_sizes <- g$n
+names(genre_sizes) <- g$genre
+
+# Then we define a function to calculate the averages of the g_k values, i.e. since many movies have multiple genres assigned to them, we will average the effects of these genres per movie. We will also see if regularization has any benefit. We will perform the calculation on the test set.
+
+# Apply the function to each string in the avg_mov_rating genre vector and store the results in a matrix with l in rows and the averages of regularized g_k for each movie in columns
+l <- seq(0,1000,100)
+mov_genre_means <- sapply(avg_mov_rating$genre, function(s) {
+  sapply(l, function(l){
+    categories <- str_split(s, "\\|")[[1]]
+    # Use the genre_values vector to look up the g_k values for each category.
+    values <- genre_values[categories]
+    # Use the genre_sizes vector to look up the sample sizes of each category.
+    sizes <- genre_sizes[categories]
+    # Regularize each genre contribution
+    g_k_reg <- values*sizes/(sizes+l)
+    # Average the values
+    sum(g_k_reg, na.rm = TRUE)/length(g_k_reg)
+  })
+})
+
+# We transpose the mov_genre_means matrix and assign column names (filled by the tuning parameter l)
+mov_genre_means <- t(mov_genre_means)
+colnames(mov_genre_means) <- l
+
+# We have to loop through every column of mov_genre_means and obtain an RMSE on the test set.
+
+genre_regul <- sapply(l, function(i) {
+  # Add a g_i (averaged genres residual per movie i) column to the avg_mov_rating data set and remove the names of the vector
+  avg_mov_rating <- avg_mov_rating %>% mutate(g_i=mov_genre_means[,colnames(mov_genre_means)==i])
+  # add the g_i column to test data sets
+  test <- avg_mov_rating %>% select(movieId, g_i)  %>% right_join(test, by="movieId", multiple="all")
+  # Calculate the RMSE on the test set.
+  mov_user_ratepa_genre_model_rmse <- RMSE(test$rating, (global_mean + test$g_i + test$m_i + test$u_j + test$rate_pa_i))
+  mov_user_ratepa_genre_model_rmse
+  #Does genre improve our fit over the movie/user/rating_pa model?
+})
+
+plot(l, genre_regul,xlab= "lambda", ylab="RMSE", mgp=c(1.7,0.5,0))
+ 
+# The minimal RMSE is obtained using l = 400 ! Let's use the l = 400 column of the mov_genre_means matrix as our final g_i estimate and add it to train and test sets.
+
+avg_mov_rating <- avg_mov_rating %>% mutate(g_i=unname(mov_genre_means[,colnames(mov_genre_means)==400]))
+# add the g_i column to test data set
+test <- avg_mov_rating %>% select(movieId, g_i)  %>% right_join(test, by="movieId", multiple="all")
+# Calculate the RMSE on the test set.
+mov_user_ratepa_genre_model_rmse <- RMSE(test$rating, (global_mean + test$g_i + test$m_i + test$u_j + test$rate_pa_i))
+
+# rating_pa_user_movie_rmse - mov_user_ratepa_genre_model_rmse
+# paste0("RMSE with movie, user, movie rating frequency and genre effects: ",signif(mov_user_ratepa_genre_model_rmse, digits=7))
+# We achieved a reduction in RMSE by 0.00012. Now it is 0.8650711.
+
+# We add the g_i effect to the train data set as well.
+train <- avg_mov_rating %>% select(movieId, g_i)  %>% right_join(train, by="movieId", multiple="all") 
+
+```
+
+
+A $\lambda$ value of `r l[which.min(genre_regul)]` was found to be optimal (Fig. 10). The RMSE dropped from `r signif(rating_pa_user_movie_rmse, digits= 5)` to `r signif(mov_user_ratepa_genre_model_rmse, digits=5)` by `r format(rating_pa_user_movie_rmse - mov_user_ratepa_genre_model_rmse, scientific=FALSE, digits=2)` when accounting for movie, user, rating frequency and now movie genre effects.
+
+
+### Year of release effect
+
+Next, we checked if there is any correlation between the year of release and the remaining average residuals per movie. We therefore plotted the residuals against year of release.  
+```{r Year-release, fig.cap='Residuals vs. year of release', fig.align='center', out.width='65%', echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+p9 <- train %>% group_by(movieId) %>% 
+  summarize(year = year[1], avg_residual = mean(rating - global_mean - m_i -u_j - rate_pa_i - g_i)) %>%
+  ggplot(aes(year, avg_residual)) +
+  geom_jitter(alpha=0.2, size=0.5)+
+  geom_smooth(method="loess", span=0.1, method.args=list(degree=1), color="red")+
+  geom_hline(yintercept=0, color="blue")+
+  ylab("Average rating residual per movie ") +
+  xlab("Year of release")+
+  ggtitle("Residuals (post movie, user, rate_pa & genre effects) vs. Year")+
+  theme(plot.title = element_text(hjust=0.5, size=10))
+p9
+```
+We observed some time-dependency with movies created before the 1940s having slightly positive residuals. In addition, there were troughs around 1980 and 1995, resulting in slightly negative residuals (Fig. 11). We deemed it worth to account for these effects. Thus, we add the effect of the year $y_{i}$ for a movie $i$ to our model:  
+\begin{center} $R_{i,j} = \mu + m_{i} + u_{j} + a_{i} + g_{i} + y_{i} + \epsilon_{i,j}$ \end{center}
+
+```{r Year-effect, fig.cap='Year effect regularization', fig.align='center', out.height='30%', echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+
+rm(g, genre_list, gs, m_i, med_genre_rating, mov_genre_means, p7, p8, stats, genre_crowded, genre_regul, genre_sizes, genre_values, unique_genres)
+
+# Let's obtain the number of movies per year of release to be able to use regularization later.
+movies_pa <- train %>% group_by(movieId) %>% 
+  summarize(year = year[1])%>% group_by(year) %>% summarize(n_y = n())
+
+# Let's obtain the per year estimates with the loess function and optimize span, using RMSE on the test set as an indicator of how the span affects our estimates.
+movie_yr <- train %>% group_by(movieId) %>% summarize(year=year[1]) # range of values of when our movies were released
+avg_mov_rating <- avg_mov_rating %>% mutate(year = movie_yr$year) # adding the year values to the movie averages object
+
+#span <- seq(0.02, 0.3, 0.02)
+# rmses_age_loess <- sapply(span, function(s){
+  
+#  data <- train %>% group_by(movieId) %>% 
+#    summarize(year = year[1], avg_residual = mean(rating - global_mean - m_i - u_j - rate_pa_i - g_i))
+#  loess_age <- data %>% loess(avg_residual ~ year, data=., span=s, degree=1)
+  
+#  r_hat <- predict(loess_age, newdata=test)
+  
+#  RMSE(test$rating, (r_hat + global_mean + test$m_i +test$u_j + test$g_i + test$rate_pa_i))
+#}
+#)
+#plot(span, rmses_age_loess)
+#span[which.min(rmses_age_loess)]
+
+# We will use a span of 0.16 although the minimum is at 0.24. 0.16 seems to be more reasonable as we have very localized deviations from 0.
+loess_age <- train %>% group_by(movieId) %>% 
+  summarize(year = year[1], avg_residual = mean(rating - global_mean - m_i - u_j - rate_pa_i - g_i)) %>% 
+  loess(avg_residual ~ year, ., span=0.16, degree=1)
+
+# Let's obtain the per year residual effects yr_i for movie i
+yr_i <- predict(loess_age, min(train$year):max(train$year))
+
+# Let's now construct a function that pulls the yr_i effects and adds them to our current effect estimates and try to regularize the model with the "movies released per year" n_y parameter (via a movies_pa_vec vector with per year movie batch sizes).
+
+names(yr_i) <- movies_pa$year #naming the yr_i vector with the release years
+movies_pa_vec <- movies_pa$n_y # generating movies per year vector
+names(movies_pa_vec) <- movies_pa$year #naming the movies_pa_vec vector with the release years
+
+# Then we define a function to assign a year effect to each  year in test$year string vector and regularize.
+l <- seq(0,1000, 100)
+year_reg_model_rmses <- sapply(l, function(l){
+  
+  # Use the yr_i vector to look up the loess-estimated year effect values for each year and look up the movies_pa vector to estimate yearly movie cohort sizes.
+  values <- yr_i[as.character(avg_mov_rating$year)]
+  sizes <- movies_pa_vec[as.character(avg_mov_rating$year)]
+  values <- unname(values)
+  sizes <- unname(sizes)
+  #Add a yr_i_reg column to the test data set, and regularize with the tuning parameter l
+  yr_i_reg <- avg_mov_rating %>% mutate(yr_i_reg = values*sizes/(sizes+l))
+  test <- yr_i_reg %>% select(movieId, yr_i_reg) %>% right_join(test, by="movieId", multiple="all")
+  # Calculate the RMSE on the test set.
+  year_reg_genre_rmse <- RMSE(test$rating, (global_mean + test$yr_i_reg + test$g_i + test$rate_pa_i + test$m_i + test$u_j))
+}
+)
+plot(l, year_reg_model_rmses, xlab= "lambda", ylab="RMSE", mgp=c(1.7,0.5,0))
+
+
+# l of 300 seems optimal. Let's add a yr_i column for l = 300 for train and test data sets.
+values <- yr_i[as.character(avg_mov_rating$year)]
+sizes <- movies_pa_vec[as.character(avg_mov_rating$year)]
+values <- unname(values)
+sizes <- unname(sizes) 
+#Add a yr_i column to the movie averages object while regularizing with the tuning parameter l = 300. Then join to train and test data sets.
+yr_i <- avg_mov_rating %>% mutate(yr_i = values*sizes/(sizes+300))
+train <- yr_i %>% select(movieId, yr_i) %>% right_join(train, by="movieId",multiple="all")
+test <- yr_i %>% select(movieId, yr_i) %>% right_join(test, by="movieId", multiple="all")
+
+# Now we calculate the new RMSE for the movie/user/rat_pa/genre/year model for the test set. Is there any improvement over the previous model?
+mov_user_ratepa_genre_year_model_rmse <- RMSE(test$rating, (global_mean + test$g_i + test$m_i + test$u_j + test$rate_pa_i + test$yr_i))
+
+```
+By estimating the year effect with the loess() function using a span of 0.16 and an optimal $\lambda$ of  `r l[which.min(year_reg_model_rmses)]` (Fig. 12), the updated model yielded a RMSE of `r signif(mov_user_ratepa_genre_year_model_rmse, digits=5)`, which is a further, modest improvement by `r format(mov_user_ratepa_genre_model_rmse - mov_user_ratepa_genre_year_model_rmse, scientific=FALSE, digits=1)` over the previous model increment. 
+
+### Date of rating
+
+Next, we examined if the time of review affected the rating submitted. To explain such effects, one possibility would be that over time users became more critical of movies and overall ratings declined or that sentiment trend was influenced in some other way. We rounded the dates to weeks to limit the number of time points to a reasonable number.
+
+```{r Review-date, fig.cap='Residuals vs. rating date', fig.align='center', out.width='75%', echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+
+rm(loess_age, movie_yr, movies_pa, p9, movies_pa_vec, rmses_age_loess, sizes, values, year_reg_model_rmses)
+
+p10 <- train %>% mutate(residual = (rating - global_mean - m_i - u_j - g_i - rate_pa_i - yr_i), date= round_date(rating_date, unit="week")) %>% group_by(date) %>% summarize(avg_residual=mean(residual), n=n()) %>%
+  ggplot(aes(date, avg_residual))+
+  geom_point(aes(size=n), alpha=0.3)+
+  geom_smooth(method="loess", span=0.05, se=FALSE)+
+  geom_hline(yintercept=0, alpha=0.7)+
+  ylab("Average rating residual per rating week ") +
+  xlab("Rating date (by weeks)")+
+  labs(size="Ratings (n)")+
+  ggtitle("Residuals (post movie, user, rate_pa, genre & year effects) vs. Date of rating")+
+  theme(plot.title = element_text(hjust=0.5, size=10))
+p10
+
+```
+
+
+As can be seen from Fig. 13, rating activity began in the 1990s. There is a downtrend in rating residuals between the end of 90s and early 2000s with a small spike around 2004. It seems as if in the 90s the rating residuals are more positive overall, maybe due to enthusiasm about the initial phase of the internet.  
+We modeled the date of review trend with the loess algorithm using a span of 0.025. Regularization with the weekly rating batch size did not benefit the prediction accuracy. 
+
+```{r Review-date-effect, echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+# We will model the date of review  trend with the loess algorithm and first optimize the span by examiing RMSE changes when applying the review data prediction on the test set.
+
+temp <- train %>% mutate(residual = (rating - global_mean - m_i - u_j - g_i - rate_pa_i - yr_i), date= round_date(rating_date, unit="week")) %>% group_by(date) %>% summarize(avg_residual=mean(residual), timestamp=timestamp[1], n=n())
+
+#span<- seq(0.025, 0.25, 0.025)
+#rmses_reviewdate_loess <- sapply(span, function(x){
+  
+#  loess_reviewdate <-  loess(avg_residual ~ timestamp , data=temp, span=x, degree=1)
+  
+#  test_temp <- test %>% mutate(residual = (rating - global_mean - m_i - u_j - g_i - rate_pa_i - yr_i), date= round_date(rating_date, unit="week")) %>% group_by(date) %>% summarize(avg_residual=mean(residual), timestamp=timestamp[1])
+    
+#  r_hat <- predict(loess_reviewdate, newdata=test_temp)
+  
+#  ind <- which(is.na(r_hat))  # there is a week in the test set that was not accounted for in the training set, we need to remove it, as it won't be estimated by the loess function.
+#  RMSE(test_temp$avg_residual[-ind], r_hat[-ind])
+# }
+# )
+# plot(span, rmses_reviewdate_loess)
+# span[which.min(rmses_reviewdate_loess)]
+
+# We will use a span of 0.025 to train the loess model.
+loess_reviewdate <- train %>% mutate(residual = (rating - global_mean - m_i - u_j - g_i - rate_pa_i - yr_i), date= round_date(rating_date, unit="week")) %>% group_by(date) %>% summarize(avg_residual=mean(residual), timestamp=timestamp[1]) %>% 
+  loess(avg_residual ~ timestamp, ., span=0.025, degree=1)
+
+# Let's obtain the review date-dependent effect revdate_w for week w over a range of observed values.
+revdate_w <- predict(loess_reviewdate, newdata=temp)
+
+# Let's now pull the revdate_w effects for each entry in the training data set and construct a function that regularizes the effects by a tuning parameter and then computes RMSE on the test data set.
+
+# We give the revdate_w vector names of the dateweek and generate a vector rev_pw_sizes with the weekly review batch sizes
+names(revdate_w) <- temp$date
+rev_pw_sizes <- temp$n
+names(rev_pw_sizes) <- temp$date
+
+# Add the date, rounded by week, to train and test data sets.
+train <- train %>% mutate(dateweek = round_date(rating_date, unit="week"))
+test <- test %>% mutate(dateweek = round_date(rating_date, unit="week"))
+
+  # Use the revdate_w vector to match the values to each entry in the train data, by dateweek, and do the same using the rev_pw_sizes vector to determine the weekly review number for that week for regularization purposes
+#  values <- revdate_w[as.character(train$dateweek)]
+#  sizes <- rev_pw_sizes[as.character(train$dateweek)]
+#  values <- unname(values)
+#  sizes <- unname(sizes)
+  
+   #Tuning parameter
+#  l <- seq(0, 1000, 100)
+  
+  # Then we define a function to assign a revdate_w effect to each stratum of rev_pw in the train$dateweek vector and regularize with tuning parameter l.
+#  revdate_reg_model_rmses <- sapply(l, function(l){
+  #Add a revdate_w effect column to the train data set, and regularize it with the tuning parameter l
+#    train_by_date <- train %>% mutate(revdate_w = values*sizes/(sizes+l)) %>% group_by(dateweek) %>% 
+#      summarize(revdate_w=revdate_w[1]) %>% select(dateweek, revdate_w)
+  # Add the revdate_w effect to the rating prediction in the test set
+#  temp <- test %>% left_join(train_by_date, by="dateweek", multiple="all") %>% mutate(r_hat = global_mean + m_i + u_j + g_i + rate_pa_i + yr_i + revdate_w) %>% select(rating, r_hat)
+  # Calculate the RMSE.
+#  revdate_reg_rmse <- RMSE(temp$rating, temp$r_hat)
+#  revdate_reg_rmse
+#}
+#)
+# plot(l, revdate_reg_model_rmses)
+# l[which.min(revdate_reg_model_rmses)]
+
+# Regularization has no benefit here. Therefore, let's just add a revdate_w column to the train and test data sets.
+values <- revdate_w[as.character(train$dateweek)]
+values <- unname(values)
+
+train <- train %>% mutate(revdate_w = values) 
+
+values <- revdate_w[as.character(test$dateweek)]
+values <- unname(values)
+
+test <- test %>% mutate(revdate_w = values) 
+
+# Now we calculate the new RMSE for the movie/user/rat_pa/genre/year/revdate model for the test set. Is there any improvement over the previous model?
+revdate_year_genre_mov_user_ratepa_model_rmse <- RMSE(test$rating, (global_mean + test$g_i + test$m_i + test$u_j + test$rate_pa_i + test$yr_i +test$revdate_w))
+
+# Insert rowId column reflecting row indices into train and test data sets
+train <- train %>% mutate(rowId= rownames(.))
+test <- test %>% mutate(rowId= rownames(.))
+```
+We could improve the RMSE to `r signif(revdate_year_genre_mov_user_ratepa_model_rmse, digits=5)` by `r format(mov_user_ratepa_genre_year_model_rmse - revdate_year_genre_mov_user_ratepa_model_rmse, scientific=FALSE, digits=2)` .
+
+### User/genre interaction effect
+
+Lastly, we considered if the remaining residuals could be reduced by accounting for individual user's preferences for certain genres. We obtained the residuals and calculated the average residuals per user and per genre. For demonstration purposes we plotted the residuals for five users, that have contributed over 1000 ratings to our training data set against genre categories (Fig. 14). User "58357", for instance, seems to have relative antipathy against Documentaries, Film-Noir or Western movies, while user "42791", in contrast is more in favor of thee genres. It therefore seemed reasonable to identify and factor in these biases.
+<!-- Computationally intensive chunk, therefore eval=FALSE ! Values are provided in next chunk to generate regularization plot. Effect estimates g_jk and g_ij are downloaded from GitHub URLs to calculate RMSE and model performance on test and final holdout test.
+-->
+```{r Genre-user-interaction, eval=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+### USER vs. GENRE ###
+#Finally, we will consider if users have preferences for certain genres. We obtain the residuals and calculate the average residuals per user and per genre.
+
+#creating a genre list from the light object avg_mov_rating and again filter out the unique genres
+genre_list <- str_split(avg_mov_rating$genre, "\\|")
+unique_genres <- sort(unique(unlist(genre_list)))
+unique_genres
+which(unique_genres == "IMAX")
+unique_genres <- unique_genres[-c(1, which(unique_genres == "IMAX"))] # removing "(no genres listed)" and "IMAX"
+unique_genres
+
+# creating a matrix matching rows of the train set with all applicable genre assignments for each movie split into separate columns
+genre_sep <- str_split(train$genres, "\\|", simplify = TRUE)
+# add column names to each of the 8 resulting columns
+colnames(genre_sep) <- c(paste0("genre",seq(1:ncol(genre_sep))))
+
+# create an empty (filled with NAs) matrix with as many rows as the train set and as many columns as there are unique genres
+genre_user_matrix <- matrix(NA, nrow = length(train$genres), ncol = length(unique_genres), dimnames = list(train$userId, unique_genres))
+
+# Calculate current residual errors
+residuals <- train %>% mutate(residual = rating - global_mean - m_i - u_j - rate_pa_i - g_i - yr_i - revdate_w) %>% pull(residual)
+
+length(residuals)==nrow(genre_user_matrix)
+
+# We create a loop to insert a rating residual, corresponding to every genre category that a movieId rated by a userId fulfills, into the genre_user_matrix, and leave "NA" for genres that a rated movie does not fit in. ###COMPUTATIONALLY INTENSIVE ###
+
+for (i in 1:nrow(genre_sep)) {
+  for (j in 1:length(unique_genres)) {
+    if (unique_genres[j] %in% genre_sep[i,]) {
+      genre_user_matrix[i, j] <- residuals[i]
+    }
+  }
+}
+
+dim(genre_user_matrix) # check for correct dimensions 
+genre_user <- as.data.frame(userId=train$userId, genre_user_matrix[,1:18]) #create a data frame with userIds matching the columns of the newly generated matrix
+genre_user <- genre_user %>% mutate(userId= train$userId) #assert userId column
+
+# calculate the mean residuals for each user and genre, add a "n" column reflecting the amount of reviews each user has submitted. Resulting object stores the g_jk effects for user j and genre k.
+genre_user_means <- genre_user %>% group_by(userId) %>% summarize(across(everything(), ~mean(., na.rm=TRUE)), n=n())
+genre_user_means <- replace(genre_user_means, is.na(genre_user_means), 0) # replace NA values with 0
+# Purpose of following code: extract the separate movie genres from each user rating in the test set, match it with the userId from the genre_user_means object and pull and average the corresponding genre residuals to compute a g_ij effect value. Try regularization using the "n" column from genre_user_means.
+
+genre_sep_test <- str_split(test$genres, "\\|", simplify = TRUE)
+colnames(genre_sep_test) <- c(paste0("genre",seq(1:ncol(genre_sep_test))))
+
+genre_sep_test <- as.data.frame(genre_sep_test)
+
+# Create a function that counts how many genres are assigned to each row
+count_non_empty <- function(row) {
+  sum(!is.na(row) & row != "")
+}
+
+# Apply the function to each row in separated-genre data frame
+genre_sep_test$genre_count <- apply(genre_sep_test, MARGIN=1, count_non_empty)
+all(genre_sep_test$userId == test$userId) # verify if data frames align by userId
+
+genre_sep_test <- genre_sep_test %>% mutate(userId=test$userId, movieId=test$movieId, g_ij=0, rowId=rownames(.)) # make sure that all information relevant to the rating, most importantly, the initial row index, are kept, so data can be reunited with the test data set. Create a g_ij column, storing the genre effect for user j and movie i, for now equal to 0
+
+merge <- merge(genre_sep_test, genre_user_means, by="userId") # join genre_sep_test data frame with the object containing all user preferences. Now each test set row contains the values for each user's genre preference effects,
+
+# function to calculate sum of genre effect values for each row matching the genre combination of the rated movie
+calc_sum <- function(row) {
+  genres <- row[2:9] #create a vector containing the genres of the rated movie for a row
+  values <- row[14:31] # create vector of the user's genre preference effect values
+  sum_values <- sapply(1:length(genres), function(i) {
+    values[which(names(values) == as.character(genres[i]))]
+  }) # run a function that finds which genres are being rated in the row and pulls the corresponding values from the values vector
+  sum_values <- unlist(sum_values, use.names = FALSE) # sum up effects
+  sum <- sum(as.numeric(sum_values)) # make sure the sum is numeric
+  sum
+}
+
+# apply the function to each row of "merge" and store the result in a g_ij_sum vector
+g_ij_sum <- apply(merge, 1, calc_sum)
+
+# divide g_ij_sum by the amount of genres assigned to the movie and store it in a g_ij column
+merge <- merge %>% mutate(g_ij = g_ij_sum / genre_count)
+# modify the test data set by calculating the current prediction and inserting a column with the row indices
+test <- test %>% mutate(r_hat = global_mean + m_i +u_j + rate_pa_i + g_i + yr_i + revdate_w, rowId= rownames(.))
+
+# regularize by user activity (stored in column "n", count for how many ratings each user has submitted), and test RMSE
+l <- seq(0,100,10)
+userxgenre_rmses <- sapply(l, function(l){
+  test <- merge %>% mutate(g_ij_reg = g_ij*n/(n+l)) %>% select(g_ij_reg, rowId) %>% right_join(test, by="rowId")
+  r_hat <- test %>% mutate(r_hat= r_hat + g_ij_reg) %>% pull(r_hat)
+  RMSE(test$rating, r_hat)
+  })
+plot(l, userxgenre_rmses)
+min(userxgenre_rmses)
+l[which.min(userxgenre_rmses)]
+# Tuning parameter of 20 is optimal.
+
+# now regularize and then join the g_ij column from merge to the test data set. It is important to join by "rowId" since neither the userIds, nor movieIds are aligned any more between "merge" and "test"
+test <- merge %>% mutate(g_ij = g_ij*n/(n+20)) %>% select(g_ij, rowId) %>% right_join(test, by="rowId")
+userxgenre_rmse <- RMSE(test$rating, test$r_hat+test$g_ij) # RMSE of updated model on the test set
+userxgenre_rmse
+paste0("RMSE with movie, user, movie rating frequency, genre, year, review date and user/genre interaction effects: ",signif(userxgenre_rmse, digits=7))
+
+
+# We repeat the very same procedure to compute the g_ij values for the train set
+
+genre_sep <- as.data.frame(genre_sep)
+
+# Apply the function that counts how many genres are assigned to each row
+genre_sep$genre_count <- apply(genre_sep, MARGIN=1, count_non_empty)
+all(genre_sep$userId == train$userId)
+
+genre_sep <- genre_sep %>% mutate(userId=train$userId, movieId=train$movieId, g_ij=0, rowId=rownames(.)) # make sure the data frame contains all identifying information, including row index
+
+merge_train <- merge(genre_sep, genre_user_means, by="userId") #fetch the user preferences and adjoin them to the genre_sep data frame
+
+# apply the calc_sum function to each row of the train set derived merge_train object and store the result in a g_ij_sum vector. COMPUTATION INTENSIVE!!! ###
+g_ij_sum <- apply(merge_train, 1, calc_sum)
+
+# divide g_ij_sum by the amount of genres assigned to the movie and regularize to generate g_ij column
+merge_train <- merge_train %>% mutate(g_ij = g_ij_sum / genre_count) %>% mutate(g_ij = g_ij*n/(n+20)) 
+
+train <- train %>% mutate(r_hat = global_mean + m_i +u_j + rate_pa_i + g_i + yr_i + revdate_w, rowId= rownames(.)) # add current prediction and make a column with row indices
+
+train <- merge_train %>% select(g_ij, rowId) %>% right_join(train, by="rowId") # include g_ij into the train data.frame
+
+rm(loess_reviewdate, p10, temp, revdate_reg_model_rmses, rmses_reviewdate_loess, sizes, values)
+
+
+# Lastly, we should look at the distribution of our finalized predictions against the true ratings to evaluate the utility of our current model.
+
+# Add the prediction from our final model to the train and test data
+train <- train %>% mutate(final_r_hat = global_mean + m_i + u_j + g_i + rate_pa_i + yr_i + revdate_w + g_ij)
+test <- test %>% mutate(final_r_hat = global_mean + m_i + u_j + g_i + rate_pa_i + yr_i + revdate_w + g_ij)
+```
+
+```{r Genre-top-5-users, fig.cap='Residuals per user (frequent raters) vs. Genre', fig.align='center', out.width='75%', echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+dl1 <- "coeff/genre_user_means.rds"
+if(!file.exists(dl1))
+  download.file("https://github.com/dblnk/Data-Science/blob/master/project-movielens/coeff/genre_user_means.rds", dl1)
+genre_user_means <- readRDS("coeff/genre_user_means.rds")
+
+#visualize residuals across genres for randomly 5 users that rate very frequently (n>1000)
+temp <- genre_user_means %>% filter(userId %in% c("58357","42791", "63134", "30723", "56707")) %>% pivot_longer(cols=c(-userId, -n),names_to="genre", values_to="residual", ) 
+temp %>% ggplot(aes(x=genre, y=residual, group=userId, color=factor(userId)))+
+  geom_point(alpha=0.5, size=1)+
+  geom_line()+
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5, hjust =1.0))+
+  ylab("Average residual per user")+
+  xlab("Genre")+
+  ggtitle("Residuals per user vs. genre ")+
+  geom_hline(yintercept=0, color="black")+
+  theme(plot.title = element_text(hjust=0.5, size=10))
+```
+
+We took the averaged users' residuals $g_{j,k}$ and then averaged these over the genres of each rated movie in the test set to obtain the effect $g_{j,i}$. Regularization by the amount of submitted ratings per user improved the RMSE at an optimal tuning parameter $\lambda$ of 20 (Fig. 15). 
+
+```{r Genre-user-regul, fig.cap='Regularization of genre-user effects', fig.align='center', out.height='30%',echo=FALSE, message=FALSE, warning=FALSE}
+df <- data.frame(userxgene_rmses=c(0.8523471, 0.8506877, 0.8503473, 0.8503779, 0.8505495, 0.8507806, 0.8510362, 0.8512996, 0.8515626, 0.8518207, 0.8520716), l=seq(0,100,10))
+plot(df$l, df$userxgene_rmses, xlab= "lambda", ylab="RMSE", mgp=c(1.7,0.5,0))
+
+dl2 <- "coeff/train_genre_user_effect.rds"
+if(!file.exists(dl2))
+  download.file("https://github.com/dblnk/Data-Science/blob/master/project-movielens/coeff/train_genre_user_effect.rds", dl2)
+train_genre_user_effect <- readRDS("coeff/train_genre_user_effect.rds")
+train <- train_genre_user_effect %>% select(g_ij, rowId) %>% right_join(train, by="rowId")
+
+
+dl3 <- "coeff/test_genre_user_effect.rds"
+if(!file.exists(dl3))
+  download.file("https://github.com/dblnk/Data-Science/blob/master/project-movielens/coeff/test_genre_user_effect.rds", dl3)
+test_genre_user_effect <- readRDS("coeff/test_genre_user_effect.rds")
+test <- test_genre_user_effect %>% select(g_ij, rowId) %>% right_join(test, by="rowId")
+
+rm (dl1, dl2, dl3)
+
+test <- test %>% mutate(r_hat = global_mean + m_i +u_j + rate_pa_i + g_i + yr_i + revdate_w + g_ij)
+userxgenre_rmse <- RMSE(test$rating, test$r_hat) # RMSE of updated model on the test set
+test <- test %>% select(-r_hat)
+```
+The RMSE now is `r signif(userxgenre_rmse, digits=5)`, an improvement by `r format(revdate_year_genre_mov_user_ratepa_model_rmse - userxgenre_rmse, scientific=FALSE, digits=4)`.  
+Thus, our final model is:
+
+\begin{center}$R_{i,j} = \mu + m_{i} + u_{j} + a_{i} + g_{i} + y_{i} + d_{w} + g_{j,i} +\epsilon_{i,j}$ \end{center} 
+
+
+### Last model tuning  
+We then looked at the distribution of our finalized predictions against the true ratings to visually evaluate the utility of the current model (Fig. 16).
+
+```{r True-vs-predicted, fig.cap='Predicted vs. true ratings', fig.align='center', out.width='60%', echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+
+rm(loess_reviewdate, p10, temp, revdate_reg_model_rmses, rmses_reviewdate_loess, sizes, values, wilcox_results, p_values)
+
+
+# Add the prediction from our final model to the train and test data
+train <- train %>% mutate(final_r_hat = global_mean + m_i + u_j + g_i + rate_pa_i + yr_i + revdate_w + g_ij)
+test <- test %>% mutate(final_r_hat = global_mean + m_i + u_j + g_i + rate_pa_i + yr_i + revdate_w + g_ij)
+
+# Predicted rating against true ratings as boxplots. Blue horizontal line indicates the overall average of movie rating averages, which we used as our initial naive prediction.
+
+p11 <- test %>% ggplot(aes(factor(rating), final_r_hat)) +
+  geom_boxplot(outlier.size=0.25) +
+  geom_hline(yintercept=c(0.5,5), lty = 2) + 
+  scale_y_continuous(limits=c(-0.7, 6.0), breaks=c(seq(-0.5,6.0,0.5)))+
+  geom_hline(yintercept=global_mean, color = "blue")+
+  xlab("True rating")+
+  ylab("Predicted rating")+
+  ggtitle("Performance of final model")+
+  theme(plot.title = element_text(hjust=0.5, size=10))
+p11
+```
+
+Our predictions per true rating stratum generally showed a good matching, ascending trend. The correlation between predicted and true ratings:
+*r* = `r signif(cor(test$rating, test$final_r_hat), digits=4)`
+
+However, we can see that some of our predicted ratings extend over the natural range of the ratings. We, therefore decided to cap our predictions. While it is reasonable to cap them to 0.5 as minimum and 5.0 as maximum values, it is not immediately clear if this would be the optimum, since our failed estimates extend over a large range of true ratings. For this reason, we built a simple, RMSE minimization function to find the optimum cut-offs. The floor should be somewhere below the global mean and the ceiling above the global mean.
+
+```{r Capping-optim, fig.cap='True vs. cap-predicted ratings', fig.align='center', out.width='60%', echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+floor <- seq(0.5, 3.2, 0.1)
+ceiling <- seq(3.3, 5.0, 0.1)
+
+limits_optim <- sapply(ceiling, function(ceiling){
+  sapply(floor, function(floor){
+    train <- train %>% mutate(final_r_hat = pmax(pmin(final_r_hat, ceiling), floor))
+    RMSE(train$rating, train$final_r_hat)
+  })
+})
+colnames(limits_optim) <- ceiling
+rownames(limits_optim) <- as.character(floor)
+
+#look up where the minimum RMSE is in the limits_optim matrix and to which floor/ceiling values it corresponds
+ind <- which(limits_optim == min(limits_optim), arr.ind = TRUE)
+
+floor_opt <- floor[ind[,1]]
+ceiling_opt <- ceiling[ind[,2]]
+
+#Thus, it is optimal to cap our predicted rating values at 1.0 for the floor and 4.7 for the ceiling. This will decrease the impact of our misses and make our predictions more conservative.
+
+# By how much do we improve our loss when applying these caps to the test data?
+final_cap_RMSE <- RMSE(test$rating,  pmax(pmin(test$final_r_hat, ceiling_opt), floor_opt)) 
+# paste0("RMSE with movie, user, rating frequency, genre, year and review date effects and prediction capping: ",signif(final_cap_RMSE, digits=7))
+# revdate_year_genre_mov_user_ratepa_model_rmse - final_cap_RMSE
+
+# Our RMSE is reduced by 0.00048 points and the value is now at 0.8499
+
+#How many of the predicted rating values are above 4.8 or below 0.8?
+
+# mean(train$final_r_hat>ceiling_opt) + mean(train$final_r_hat<floor_opt)
+
+# mean(test$final_r_hat>ceiling_opt) + mean(test$final_r_hat<floor_opt)
+
+# About 0.9% % of predicted ratings are affected by our capping method which seems reasonable.
+
+# Final plot with capped predictions
+p12 <- test %>% ggplot(aes(factor(rating), pmax(pmin(final_r_hat, 4.6), 1.0))) +
+  geom_boxplot(outlier.size=0.25) +
+  geom_hline(yintercept=c(0.5,5), lty = 2) + 
+  scale_y_continuous(limits=c(-0.7, 6.0), breaks=c(seq(-0.5,6.0,0.5)))+
+  geom_hline(yintercept=global_mean, color = "blue")+
+  xlab("True rating")+
+  ylab("Capped predicted rating")+
+  ggtitle("Performance of final model (capped)")+
+  theme(plot.title = element_text(hjust=0.5))
+p12
+
+
+# We compare each step of our incrementally developed model
+rmses_compare <- data.frame(model = 
+                              c("Average", "Movie", "Movie User", "Movie User Rating.pa", "Movie User Rating.pa Genre", "Movie User Rating.pa Genre Year", "Movie User Rating.pa Genre Year Revdate",  "Movie User Rating.pa Genre Year Revdate UserxGenre", "Movie User Rating.pa Genre Year Revdate UserxGenre CAP"), 
+                            RMSE = signif(c(global_mean_rmse, movie_rmse, user_movie_rmse, rating_pa_user_movie_rmse, mov_user_ratepa_genre_model_rmse, mov_user_ratepa_genre_year_model_rmse, revdate_year_genre_mov_user_ratepa_model_rmse, userxgenre_rmse, final_cap_RMSE), digits=5),
+                            Improvement = format(c(0,
+global_mean_rmse - movie_rmse,
+movie_rmse - user_movie_rmse,
+user_movie_rmse - rating_pa_user_movie_rmse,
+rating_pa_user_movie_rmse - mov_user_ratepa_genre_model_rmse,
+mov_user_ratepa_genre_model_rmse - mov_user_ratepa_genre_year_model_rmse,
+mov_user_ratepa_genre_year_model_rmse  - revdate_year_genre_mov_user_ratepa_model_rmse,
+revdate_year_genre_mov_user_ratepa_model_rmse - userxgenre_rmse,
+userxgenre_rmse - final_cap_RMSE), scientific=FALSE, digits=1))
+
+
+
+```
+
+We obtained an optimum floor value of `r floor_opt` and a ceiling value of `r ceiling_opt`. When applying this clipping to the model prediction on the test set, the RMSE improved to `r signif(final_cap_RMSE, digits=5)` by another `r format(userxgenre_rmse - final_cap_RMSE, scientific=FALSE, digits=2)`. Capping, therefore, decreases the impact of our misses and makes our predictions more conservative. Capping affected `r percent(mean(test$final_r_hat>ceiling_opt) + mean(test$final_r_hat<floor_opt), accuracy=0.1)` of values which appears reasonable and not too corrective (Fig. 17). The correlation coefficient *r* between true and capped predicted ratings slightly rose to `r signif(cor(test$rating, pmax(pmin(test$final_r_hat, ceiling_opt), floor_opt)), digits=4)`  
+In summary, incremental addition of feature effects to reduce residuals led to a step-wise decrease in RMSE:  
+`r rmses_compare %>% knitr::kable(caption = "\\textit{Step-wise development of a linear, rating prediction model and the according RMSEs}")`
+
+
+### Performance on the final holdout test set
+
+At last, the performance of our prediction algorithm was assessed on the final holdout validation test after adding the computed feature effects.
+```{r Final-holdout-effects, echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+# We are going to save the computed effects for later retrieval and sharing purposes.
+effects <- train %>% group_by(movieId) %>% summarize(year = year[1], yr_i = yr_i[1], g_i = g_i[1], m_i = m_i[1], rate_pa_i = rate_pa_i[1])
+effects <- effects %>% mutate (avg_rating = avg_mov_rating$avg_rating, genre = avg_mov_rating$genre, n_reviews = avg_mov_rating$n)
+
+rm(ind, limits_optim, p11, l, yr_i, ceiling, floor, p12)
+
+### We will now test the model on the final holdout test ###
+final_holdout_test <- readRDS("data/final_holdout_test.rds")
+
+# add user effects
+final_holdout_test <- final_holdout_test %>% left_join(u_j, by="userId")
+
+# add all other effect
+final_holdout_test <- effects %>% select(-genre, -n_reviews) %>% right_join(final_holdout_test, by="movieId", multiple="all") 
+# create rating date and week columns
+final_holdout_test <-final_holdout_test %>% mutate(rating_date = as_datetime(timestamp), dateweek = round_date(rating_date, unit="week"))
+
+# pull revdate_w estimates for each entry in final_holdout_test and add them to the data set. Calculate final capped prediction.
+values <- revdate_w[as.character(final_holdout_test$dateweek)]
+values <- unname(values)
+final_holdout_test <- final_holdout_test %>% mutate(revdate_w = values, rowId=rownames(.))
+
+#create a column with row indices
+final_holdout_test <- final_holdout_test %>% mutate(rowId = rownames(.))
+```
+
+```{r Final-holdout-genrexuser, eval=FALSE, echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+### COMPUTATIONALLY INTENSIVE. PREREQUISITES ARE IN A CHUNK THAT IS SET TO eval=FALSE ###
+# Now we add the individual user's genre preferences.
+final_holdout_test <- final_holdout_test %>% mutate(rowId = rownames(.))
+genre_sep_final <- str_split(final_holdout_test$genres, "\\|", simplify = TRUE)
+# add column names to each of the 8 resulting columns
+colnames(genre_sep_final) <- c(paste0("genre",seq(1:ncol(genre_sep_final))))
+genre_sep_final <- as.data.frame(genre_sep_final)
+
+# Counts how many genres are assigned to each row
+# Apply the function to each row
+genre_sep_final$genre_count <- apply(genre_sep_final, MARGIN=1, count_non_empty)
+all(genre_sep_final$userId == final_holdout_test$userId)
+
+genre_sep_final <- genre_sep_final %>% mutate(userId=final_holdout_test$userId, movieId=final_holdout_test$movieId, g_ij=0, rowId=rownames(.))
+
+merge_final <- merge(genre_sep_final, genre_user_means, by="userId")
+
+# apply the calc_sum function to each row of the final holdout test set and store the result in a g_ij_sum vector. ###
+g_ij_sum <- apply(merge_final, 1, calc_sum)
+
+# divide g_ij_sum by the amount of genres assigned to the movie and regularize to generate g_ij column
+merge_final <- merge_final %>% mutate(g_ij = g_ij_sum / genre_count) %>% mutate(g_ij = g_ij*n/(n+20)) 
+
+final_holdout_test <- merge_final %>% select(g_ij, rowId) %>% right_join(final_holdout_test, by="rowId")
+
+# save g_ij effect for final_holdout_test set in an object together with rowId, userId and movieId for later retrieval and joining with final_holdout_test
+final_holdout_genre_user_effect <- final_holdout_test %>% select(rowId, userId, movieId, g_ij)
+saveRDS(final_holdout_genre_user_effect, "coeff/final_holdout_genre_user_effect.rds")
+
+final_holdout_test <- final_holdout_test %>% mutate(final_r_hat = pmax(pmin(global_mean + m_i + u_j + rate_pa_i + g_i + yr_i + revdate_w + g_ij, ceiling), floor)) 
+
+```
+
+```{r Final-holdout-RMSE, echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+#download g_ij effects, if previous chunk set to eval=FALSE
+dl <- "coeff/final_holdout_genre_user_effect.rds"
+if(!file.exists(dl))
+  download.file("https://github.com/dblnk/Data-Science/blob/master/project-movielens/coeff/final_holdout_genre_user_effect.rds", dl)
+
+final_holdout_genre_user_effect <- readRDS("coeff/final_holdout_genre_user_effect.rds")
+final_holdout_test <- final_holdout_genre_user_effect %>% select(rowId, g_ij) %>% right_join(final_holdout_test, by="rowId") #rowIds were added at step that they would correctly align with the retrieved object
+
+# Calculate final prediction
+final_holdout_test <- final_holdout_test %>% mutate(final_r_hat = pmax(pmin(global_mean + m_i + u_j + rate_pa_i + g_i + yr_i + revdate_w + g_ij, ceiling_opt), floor_opt)) 
+
+evaluation <- RMSE(final_holdout_test$rating, final_holdout_test$final_r_hat)
+```
+RMSE when applying final model and prediction capping to the final holdout validation set: **`r signif(evaluation, digits=5)`**.
+
+\newpage
+## CONCLUSION
+We have demonstrated that it is possible to devise a recommendation system based on a priori knowledge of users and their rating behavior. By generating a linear model through incremental reduction of residual errors, we achieved fairly high accuracy of our predicted ratings in a validation set, amounting to a RMSE of **`r signif(evaluation, digits=5)`**. Estimation of movie and user effects, followed by preferences of users for genres, had the largest share in reducing the loss, and these features might be preferentially considered when developing models on similar data sets. Accounting for variables such as year of release, movie genre, rating rate and rating date further improved our predictions, albeit rather modestly. 
+
+It is conceivable that the recommendation system can be improved further. We have not taken into account individual user preferences for certain movie characteristics other than genre. A matrix factorization approach could have utility in explaining preferences of specific users for certain movie types, such as artsy in contrast to blockbuster movies, or for particular actors. In addition, our prediction system only allows us to rate movies that were contained in our training data set. To build a recommendation system that can predict ratings of novel movies, it might be warranted to explore the power of movie title effects. Some movie titles might contain additional information. For instance, we know from experience that sequels are likely to do worse than the original pilot movies. On the other hand, users that had highly rated to pilot and sequel movie might want to watch the second sequel. Furthermore, a text mining language analysis of movie titles, by for instance sentiment analysis, could be used to train an algorithm based on analysis if certain terms associate with better or worse ratings. This would allow building a true recommendation system that can make a judgement based on genre and title of movies that have not been part of a training data set, but also incorporate known genre preferences of particular users,
