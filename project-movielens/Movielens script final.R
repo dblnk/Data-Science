@@ -1,6 +1,6 @@
-### Make sure to go to Tools -> Global Options -> Code -> tick "Soft-wrap R source files" to see comments wrapped###
+### Make sure to go to Tools -> Global Options -> Code -> tick "Soft-wrap R source files" to see comments wrapped ###
 ### THE PROJECT IS AVAILABLE UNDER https://github.com/dblnk/Data-Science/tree/master/project-movielens ###
-### THE DEVELOPING OF THE MODEL CONSISTS OF STEPS 1-10 -> navigate if necessary ###
+### THE DEVELOPING OF THE MODEL CONSISTS OF STEPS 1-10 -> navigate if necessary ### ### all effects are understood as effect estimates. The "hat" notation of estimates is therefore omitted ###
 ### MAKE SURE TO RUN THE CODE IN LINES 14-119 TO GENERATE "edx.rds", "final_holdout_test.rds", "train.rds" and "test.rds" FILES INTO A data/ DIRECTORY ###
 
 ############### START OF INITIAL CODE PROVIDED BY PROF. IRIZARRY AND HIS TEAM ############### 
@@ -139,8 +139,6 @@ temp<- train %>% group_by(movieId) %>% summarize(avg_rating = mean(rating), n = 
 paste0("Movie ratings above overall average: ", percent (mean(temp$avg_rating >= global_mean), accuracy=0.1))
 
 # Movie ratings show a sightly skewed right-sided distribution, with 55% of all movie ratings resulting in above average ratings.
-quantile(temp$avg_rating, probs = seq(0.1, 1.0, 0.1))
-
 
 # How many reviews do the movies receive?
 p2 <- train %>% group_by(movieId) %>% summarize(n = n()) %>%
@@ -179,7 +177,7 @@ global_mean_rmse <- RMSE(test$rating, global_mean)
 paste0("RMSE for global mean as predictor: ",signif(global_mean_rmse, digits=7))
 
 # Movie effect
-# We calculate the movie effect (and the inherent remaining residual) by subtracting the global_mean from the average movie rating. We also define a tuning parameter l to penalize predictions of rarely reviewed movies. We are probing a range of l and examine which value of l minimizes the RMSE in the test set.
+# We calculate the movie effect by subtracting the global_mean from the average movie rating. We also define a tuning parameter l to penalize predictions of rarely reviewed movies. We are probing a range of l and examine which value of l minimizes the RMSE in the test set.
 l <- seq(0, 10, 1)
 movie_rmses <- sapply(l, function(l){
   m_i <- train %>% group_by(movieId) %>% 
