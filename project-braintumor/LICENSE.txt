@@ -1,0 +1,7 @@
+###############################
+### LICENSE CC BY-NC-SA 4.0 ###
+###############################
+
+The brain-tumor dataset is distributed under a CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses/by-nc-sa/4.0/). 
+It is authored by Jakesh Bohaju and was obtained from this person's kaggle submission under https://www.kaggle.com/datasets/jakeshbohaju/brain-tumor. 
+The data is stated to be derived from the original source under https://www.smir.ch/BRATS/Start2015 and contains first-order and second-order features extracted for the above-mentioned Brat2015 MRI image repository using various mathematical terminologies.

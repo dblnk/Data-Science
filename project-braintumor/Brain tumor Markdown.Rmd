@@ -1,0 +1,219 @@
+---
+title: "Brain tumor prediction model - HarvardX Data science Capstone assignment #2"
+author: "edX learner DBel_17"
+date: "April 22nd, 2023"
+bibliography: citations.bib
+csl: london-south-bank-university-numeric.csl
+output:
+  pdf_document: 
+  keep_tex: yes
+header-includes:
+  - \usepackage{float}
+---
+
+```{r Essential-downloads, echo=FALSE, message=FALSE, warning=FALSE}
+dl <- "data/brain-tumor.zip"
+if(!file.exists(dl))
+  download.file("https://www.kaggle.com/datasets/jakeshbohaju/brain-tumor/download?datasetVersionNumber=3", dl)
+
+dl <- "data/archive.zip"
+brain_tumor <- "data/brain-tumor/Brain Tumor.csv"
+if(!file.exists(brain_tumor))
+  unzip(dl, exdir="data/brain-tumor")
+```
+
+
+```{r setup, include=FALSE}
+if(!require(knitr)) install.packages("knitr", repos = "http://cran.us.r-project.org")
+knitr::opts_chunk$set(collapse=TRUE, fig.pos = 'H', fig.align= 'center', echo = FALSE,  dpi = 72)
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(gbm)) install.packages("gbm")
+if(!require(gam)) install.packages("gam")
+if(!require(jpeg)) install.packages("jpeg", repos = "http://cran.us.r-project.org")
+if(!require(broom)) install.packages("broom", repos = "http://cran.us.r-project.org")
+if(!require(dslabs)) install.packages("dslabs", repos = "http://cran.us.r-project.org")
+if(!require(purrr)) install.packages("purrr", repos = "http://cran.us.r-project.org")
+if(!require(gridExtra)) install.packages("gridExtra", repos = "http://cran.us.r-project.org")
+if(!require(scales)) install.packages("scales", repos = "http://cran.us.r-project.org")
+if(!require(matrixStats)) install.packages("matrixStats", repos = "http://cran.us.r-project.org")
+if(!require(ggrepel)) install.packages("ggrepel", repos = "http://cran.us.r-project.org")
+if(!require(tinytex)) install.packages("tinytex", repos = "http://cran.us.r-project.org")
+if(!require(tinytex)) tinytex::install_tinytex()
+if(!require(float)) install.packages("float", repos = "http://cran.us.r-project.org")
+if(!require(pandoc)) install.packages("pandoc", repos = "http://cran.us.r-project.org")
+if(!require(tibble)) install.packages("tibble", repos = "http://cran.us.r-project.org")
+```
+
+## INTRODUCTION
+
+Glioma is the most frequent brain tumor and consists of cells that most closely resemble those brain cells which normally fulfill supportive and structural tasks, i.e. glial and astrocyte cells, as opposed to the signal transmitting neurons [@glioma2012]. Clinical diagnosis and prognosis of glioma depend on magnetic resonance tomography (MRI) imaging and evaluation of the scans by experienced radiologists. In the past decade, machine-learning methods have been devised to identify and demarcate different regions of brain tumors, which is referred to as brain tumor segmentation. The goal of these endeavors is to facilitate and objectify tumor diagnosis. Precise diagnosis is at the core of appropriate patient care and prognostic projections [@menze2012].
+
+In the present project, a pre-processed dataset was retrieved from the Kaggle repository [@bohaju2020], containing a series of MRI scan images from patients diagnosed with glioma. The scans show either completely normal or tumor-infiltrated areas of tissue. Each image was assigned a ground truth allowing for evaluation of prediction algorithms. Although the purpose of the original dataset was to classify and segment the MRI sections into areas of either normal tissue or four different types of tumorous tissue [@menze2012, @brats2015], the creator of the Kaggle dataset had simplified the task. The outcome measure now only differentiates between images strictly positive or negative for the appearance of a tumor. Thus, it becomes a binary classification challenge.
+
+Furthermore, the texture features of the images were extracted using mathematical methods applying the gray-level co-occurrence matrix (GLCM) [@texture1973, @features2012] resulting in first-order and second-order features. First-order features, namely variance (or standard deviation), kurtosis, skewness and mean, provide a measure of how grey pixels are overall distributed across the image, while second-order features such as angular second moment (ASM), entropy, contrast or dissimilarity quantify the relationship between pixels within the image and can be used to extrapolate to the coarseness or smoothness of an image.
+
+## METHODS
+
+```{r Preprocessing, eval=TRUE, message=FALSE, include=FALSE}
+options(digits=7)
+bt <- read.csv2(file=brain_tumor, sep=",", dec=".")
+bt[,3:14] <- signif(bt[,3:14], digits=5)
+bt[,15] <- round(bt[,15], digits=3)
+str(bt)
+names(bt)
+
+
+#check value structure
+summary(bt)
+# check frequency of the outcome
+prop.table(table(bt$Class))
+```
+### Data partitioning
+To independently validate our model, we partitioned the initial dataset containing `r dim(bt)[1]` images into a development and a final holdout dataset, using a 90/10 partition, leaving enough data for training. The development data were further split into a training and test set, again using a 90/10 partition. Models were then trained and performance assessed. Finally, the models were trained on the complete development set to feed as much data as possible and the prediction algorithm evaluated on the final holdout set.
+
+### Assessing model performance
+Since we had a discrete binary outcome, we used Accuracy **A** as a measure of model performance which is defined as 
+\begin{center} $\mathbf{A} = \frac{TP +TN}{TP + TN + FP + FN}$, with T being "true", F being "false", P being "positive" and N "being negative". \end{center}
+Any model performance has to be measured against a random prediction which in the case of a binary outcome would have an accuracy of 50%.
+
+### Feature selection
+There were 13 predictors present in the Kaggle dataset: **`r names(bt[,3:15])`**. Predictors with low variance were identified with nearZeroVar() from the *caret* package and thus **Coarseness** was removed. 
+``` {r Preprocessing2, eval=FALSE, message=FALSE, include=FALSE}
+#Simplify names
+bt <- bt %>% rename(StdDev = Standard.Deviation)
+
+#Check if any of the predictors have very low variance
+nearZeroVar(bt[,2:15], saveMetrics=TRUE)
+
+# Remove Coarseness due to low Variance.
+bt <- bt %>% select(-Coarseness)
+
+# Creating a validation dataset: the final holdout set
+set.seed(1996)
+test_index <- createDataPartition(bt$Class, times=1, p=0.1, list=FALSE)
+final_holdout <- bt[test_index,]
+dev <- bt[-test_index,]
+
+#check if outcomes are equally distributed
+prop.table(table(final_holdout$Class))
+prop.table(table(dev$Class))
+
+saveRDS(final_holdout, file="data/final_holdout.rds")
+saveRDS(dev, file="data/dev.rds")
+
+# Create another testing set for testing model performance during model development
+set.seed(7)
+test_index <- createDataPartition(dev$Class, times=1, p=0.1, list=FALSE)
+test <- dev[test_index,]
+train <- dev[-test_index,]
+#check if outcomes are equally distributed
+prop.table(table(train$Class))
+prop.table(table(test$Class))
+
+# save datasets
+saveRDS(test, file="data/test.rds")
+saveRDS(train, file="data/train.rds")
+```
+```{r Feature-distribution, fig.cap='Outcome discrimination by features', out.height='40%', echo=FALSE, warning=FALSE, message=FALSE}
+options(digits=7)
+bt <- read.csv2(file=brain_tumor, sep=",", dec=".")
+bt[,3:14] <- signif(bt[,3:14], digits=5)
+bt[,15] <- round(bt[,15], digits=3)
+#Simplify names
+bt <- bt %>% rename(StdDev = Standard.Deviation)
+
+# Remove Coarseness due to low Variance.
+bt <- bt %>% select(-Coarseness)
+
+ds_theme_set()
+#Let's look at the value distributions
+bp <- bt %>% pivot_longer(Mean:Correlation, names_to="parameter", values_to="value") %>% 
+  ggplot(aes(parameter, value, color=factor(Class, labels=c("normal","tumor")))) + 
+  geom_boxplot(outlier.size=0.2) +
+  scale_color_manual(values = c("#2e8b57", "#F8766D"))+
+   guides(color=guide_legend(title=NULL))+
+  scale_y_continuous(trans="log10")+
+  ggtitle("Distribution of features between outcomes")+
+  xlab("")+
+  theme(plot.title = element_text(hjust=0.5, size=12))+
+  theme(axis.text.x = element_text(angle=90, hjust=1.0))
+bp
+#ggsave("fig/boxplot_prd_outc.pdf")
+```
+As can be seen from Fig. X, some features have more discriminative power than others and some like ASM and Entropy display almost the same distribution.
+To exclude redundant features and therefore to decrease the possibility of overfitting as well as to save computational resources, a filter method was applied examining the correlation and relationships between predictors among themselves and between predictors and the outcome. To presume that correlation is given, the Pearson correlation coefficient had to be greater than 0.7. Deterministic relationships between features spoke in favor of retaining only the one with the highest correlation to the outcome, while stochastic relationships were weighed in favor of retaining a feature in a correlation cluster. To not lose important information, the decision to exclude features was therefore conservative.
+A pairwise scatter plot grid (Fig. X) and a pairwise correlation matrix (Fig. X) guided the selection.
+
+```{r Feature-behavior, fig.cap='Scatter plots between features and outcome', out.height='90%', echo=FALSE, warning=FALSE, message=FALSE}
+#load the datasets
+test <- readRDS(file="data/test.rds")
+train <- readRDS(file="data/train.rds")
+
+# reshuffle columns to accurately reflect first- and second order features and sort them according to their correlations (see further below)
+train <- train %>% select(Image, Class, Mean, Variance, StdDev, Energy, ASM, Entropy, Homogeneity, Contrast, Dissimilarity, Skewness, Kurtosis, Correlation)
+
+test <- test %>% select(Image, Class, Mean, Variance, StdDev, Energy, ASM, Entropy, Homogeneity, Contrast, Dissimilarity, Skewness, Kurtosis, Correlation)
+
+
+par(mar = c(2, 2, 4, 2), xpd=TRUE, font.main=2, cex.main=1)
+colors <- c("#2e8b57", 
+            "#F8766D")
+# plot the data in 10% of the train dataset
+set.seed(1)
+train %>% select(-1) %>% slice_sample(prop=0.1) %>%
+  plot(., pch=1, lwd=0.5, cex=0.4, col=colors[factor(.$Class)], main="Scatter plots between features and outcome")
+# position of legend will vary depending on machine and installation
+legend(-0.5, 1.5, legend = c("no tumor", "tumor"),
+       pch = 19,
+       col = colors, cex=0.5)
+```
+
+```{r Feature-selection, fig.cap='Correlation between features and outcome', out.height='38%', echo=FALSE, warning=FALSE, message=FALSE}
+par(mar = c(6, 6, 4, 2), xpd=TRUE)
+corel <- cor(train[,2:14])
+
+# heatmap the correlation matrix and add matching correlation coefficients inside the cells of the matrix with a for loop
+pal <-  colorRampPalette(c("blue", "white", "red"))(100)
+image(corel, axes=FALSE, col = pal)
+names <- names(train[,2:14])
+axis(side = 1, at = seq(0,1.0, length.out=13), labels = names, las=2, cex.axis=0.75)
+axis(side = 2, at = seq(0,1.0, length.out=13), labels = names, las=2, cex.axis=0.75)
+text(0.5,1.1,"Correlation between features and outcome")
+# for loop to add corresponding values inside the heatmap
+for(i in 1:nrow(corel)) {
+  for(j in 1:ncol(corel)) {
+    text(((j-1)*(1/(ncol(corel)-1))), ((i-1)*(1/(nrow(corel)-1))), round(corel[i,j], 2), col="black", cex=0.5)
+  }
+}
+```
+
+Mean, Variance and Std.Dev. are highly correlated between each other. Variance has the highest positive correlation to the outcome ("Class"), but Mean is anti-correlated and shows a stochastic relationship to Variance. Therefore, Mean and Variance were kept.
+
+Entropy, Energy, ASM and Homogeneity are highly correlated. Energy has the highest anti-correlation to class. Homogeneity is the only one to show a stochastic relationship to the other three features in the cluster. We therefore kept Energy and Homogeneity.
+
+Dissimilarity and Contrast are highly correlated. Dissimilarity has higher correlation to Class and was retained.
+
+Kurtosis and Skewness are highly correlated and have a deterministic relationship. Skewness has the stronger correlation to Class and was retained.
+
+In summary, we kept the following 7 of the 12 non-zero-variance features for training:
+**Variance, Mean, Energy, Homogeneity, Skewness, Dissimilarity and Correlation**.
+
+### Scan visualization
+MRI scans were read with the readJPEG() function of the *jpeg* package and visualized using the base *R* plot(as.raster()) function. An example of randomly selected images of normal and tumorous tissues is provided in Fig. X. It can be seen that all sections are in the transverse plane. 
+```{r Brain-scans, fig.cap='Examples of MRI images', results='asis', out.height='50%', echo=FALSE, warning=FALSE, message=FALSE}
+#Let's visualize 16 random images, half tumor, half normal
+set.seed(1997)
+img <- c(sample(train$Image[which(train$Class==0)] , 8), sample(train$Image[which(train$Class==1)] , 8))
+
+# Letters signify the true class, T for "tumor" or "1" and N for "normal" or "0"
+  par(mar = c(2, 1, 1, 1), xpd=TRUE)
+  par(mfrow = c(4,4))
+  for (i in img) {
+    image <- jpeg::readJPEG(paste0("data/brain-tumor/Brain Tumor/",i,".jpg"))
+    title <- i
+    plot(as.raster(image))
+    title(main=title)
+    text(x=25, y=30, ifelse(train$Class[which(train$Image==i)] == 1, "T", "N"), cex=3, col= ifelse(train$Class[which(train$Image==i)] == 1, "red", "#2e8b57"))
+  }
+```
