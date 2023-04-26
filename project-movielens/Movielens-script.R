@@ -1,13 +1,12 @@
 ### Make sure to go to Tools -> Global Options -> Code -> tick "Soft-wrap R source files" to see comments wrapped ###
 ### THE PROJECT IS AVAILABLE UNDER https://github.com/dblnk/Data-Science/tree/master/project-movielens ###
-### THE DEVELOPING OF THE MODEL CONSISTS OF STEPS 1-10 -> navigate if necessary ### ### all effects are understood as effect estimates. The "hat" notation of estimates is therefore omitted ###
-### MAKE SURE TO RUN THE CODE IN LINES 14-119 TO GENERATE "edx.rds", "final_holdout_test.rds", "train.rds" and "test.rds" FILES INTO A data/ DIRECTORY ###
+### THE DEVELOPING OF THE MODEL CONSISTS OF STEPS 1-10 -> navigate if necessary through the dropwdown menu ###
+### All effects are understood as effect estimates. The "hat" notation of estimates is therefore omitted ###
+### MAKE SURE TO RUN THE CODE IN LINES 13-115 TO GENERATE "edx.rds", "final_holdout_test.rds", "train.rds" and "test.rds" FILES INTO A data/ DIRECTORY ###
 
 ############### START OF INITIAL CODE PROVIDED BY PROF. IRIZARRY AND HIS TEAM ############### 
 
-##########################################################
 # Create edx and final_holdout_test sets 
-##########################################################
 
 # Note: this process could take a couple of minutes
 
@@ -81,11 +80,10 @@ edx <- readRDS("data/edx.rds")
 if(!require(lubridate)) install.packages("lubridate", repos = "http://cran.us.r-project.org")
 if(!require(broom)) install.packages("broom", repos = "http://cran.us.r-project.org")
 if(!require(dslabs)) install.packages("dslabs", repos = "http://cran.us.r-project.org")
-if(!require(purrr)) install.packages("purrr", repos = "http://cran.us.r-project.org")
 if(!require(gridExtra)) install.packages("gridExtra", repos = "http://cran.us.r-project.org")
 if(!require(scales)) install.packages("scales", repos = "http://cran.us.r-project.org")
-library(tidyverse)
-library(caret)
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
 
 # First we split the edx data into a training (80%) and a validation test set (20%). We will use the training set to derive our model and test the model performance on the test set.
 set.seed(1998)
@@ -115,7 +113,7 @@ rm(test_index, temp, removed)
 
 options(digits=7)
 
-### STEP 1: MOVIE EFFECTS ###
+############### STEP 1: MOVIE EFFECTS ###############
 
 # Since the quality of a movie should have the largest effect on its rating and we need to make a judgement if we want to recommend a particular movie, we will first derive a measure of how a movie, the subject of the rating, influences the review score. Naively put, are there movie effects? Let's see how the values are distributed after averaging the ratings for each movie.
 
@@ -203,7 +201,7 @@ movie_rmse <-RMSE(test$rating, (global_mean + test$m_i))
 
 paste0("RMSE with movie effects: ",signif(movie_rmse, digits=7))
 
-### STEP 2: USER effects ###
+############### STEP 2: USER effects ###############
 
 # Now we want to consider the effects of subjective rating based on user identity. How does the perception of the individual influence their judgement? Are there user effects? Let's see how the values of the average user rating and the amount of ratings each user has left are distributed.
 temp <- train %>% group_by(userId) %>% summarize(avg_user_rating = mean(rating), n = n())
@@ -295,7 +293,7 @@ user_movie_rmse <- RMSE(test$rating, (global_mean + test$m_i + test$u_j))
 paste0("RMSE with movie and user effects: ",signif(user_movie_rmse, digits=7))
 
 
-### STEP 3: TIME EFFECTS ###
+###############STEP 3: TIME EFFECTS ###############
 # To consider time-dependent effects we first need to extract the year of release from the movie title (-> year), we will also clean up the title by removing the year and create a rating date from the timestamp (-> rating_date), in both training and test data sets.
 
 train <- train %>% mutate(year = parse_number(str_extract(title, "\\(\\d{4}\\)$")), 
@@ -426,7 +424,7 @@ user_movie_rmse - rating_pa_user_movie_rmse
 
 rm(temp, train_rate_pa_i, loess_ratingrate, p1,p2,p3,p4,p5,p6, ratings_pa_strata, train_ratings_pa, train_users, movie_rmses, quants, range, rating_pa_model_rmses, ratings_pa_int_sizes, rmses_ratingrate_loess, values, user_movie_rmses)
 
-### STEP 4: MOVIE-GENRE effects ###
+############### STEP 4: MOVIE-GENRE effects ###############
 
 # We will continue by examining if our current residuals (after accounting for movie, user and rating frequency effects) can be explained by genre.
 
@@ -629,7 +627,8 @@ train <- avg_mov_rating %>% select(movieId, g_i)  %>% right_join(train, by="movi
 rm(g, genre_list, gs, m_i, med_genre_rating, mov_genre_means, p7, p8, stats, genre_crowded, genre_regul, genre_sizes, genre_values, unique_genres)
 
 
-### STEP 5: YEAR effect ###
+############### STEP 5: YEAR effect ###############
+
 # Next, we want to check if there is any correlation between the year of release and the remaining average residuals per movie. It might be that old movies were particularly entertaining or there was a peak in quality at some point, or maybe modern movies are the pinnacle of cinematography.
 
 # Let's first plot the residuals against year of release.
@@ -833,7 +832,7 @@ mov_user_ratepa_genre_year_model_rmse - revdate_year_genre_mov_user_ratepa_model
 
 # We improved the loss of our prediction by additional 0.00011 units. Now the RMSE is 0.86489
 
-### STEP 7: USER-GENRE effects ###
+############### STEP 7: USER-GENRE effects ###############
 #Finally, we will consider if users have preferences for certain genres. We obtain the residuals and calculate the average residuals per user and per genre.
 
 #creating a genre list from the light object avg_mov_rating and again filter out the unique genres
@@ -971,7 +970,7 @@ train <- merge_train %>% select(g_ij, rowId) %>% right_join(train, by="rowId") #
 
 rm(loess_reviewdate, p10, temp, revdate_reg_model_rmses, rmses_reviewdate_loess, sizes, values)
 
-### STEP 8: PREDICTED vs. TRUE rating assessment ###
+############### STEP 8: PREDICTED vs. TRUE rating assessment ###############
 
 # Lastly, we should look at the distribution of our finalized predictions against the true ratings to evaluate the utility of our current model.
 
@@ -1011,7 +1010,7 @@ paste0("Correlation between predicted and true ratings: ",signif(cor(test$rating
 
 # We can see that some of our predicted ratings extend over the natural range of the ratings. We should consider capping our predictions. While it is reasonable to cap them to 0.5 as minimum and 5.0 as maximum, it is not immediately clear if this would be the optimum, since our failed estimates extend over a large range of true ratings. Therefore we will build a function to find the optimum. The floor should be somewhere below the global mean and the ceiling above the global mean, however.
 
-### STEP 9: DATA CLIPPING OPTIMIZATION ###
+############### STEP 9: DATA CLIPPING OPTIMIZATION ###############
 
 floor <- seq(0.5, 3.2, 0.1)
 ceiling <- seq(3.3, 5.0, 0.1)
@@ -1114,7 +1113,7 @@ genre_user_means <- readRDS("coeff/genre_user_means.rds")
 train_genre_user_effect <- readRDS("coeff/train_genre_user_effect.rds")
 test_genre_user_effect <- readRDS("coeff/test_genre_user_effect.rds")
 
-### STEP 10: VALUATION OF MODEL PERFORMANCE ON FINAL HOLDOUT TEST ###
+############### STEP 10: VALUATION OF MODEL PERFORMANCE ON FINAL HOLDOUT TEST ###############
 
 ### We will now test the model on the final holdout test ###
 

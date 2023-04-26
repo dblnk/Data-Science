@@ -1,7 +1,7 @@
 ---
 title: "MovieLens rating prediction model - HarvardX Data science Capstone assignment #1"
 author: "edX learner DBel_17"
-date: "March 13th, 2023"
+date: "April 26th, 2023"
 output:
   pdf_document: 
   keep_tex: yes
@@ -9,12 +9,12 @@ header-includes:
   - \usepackage{float}
 ---
 <!-- THE PROJECT IS AVAILABLE UNDER https://github.com/dblnk/Data-Science/tree/master/project-movielens ,
+edx.rds file under https://www.dropbox.com/s/xjopbrd1a3t67s8/edx.rds?dl=0 <!-- THE PROJECT IS AVAILABLE UNDER https://github.com/dblnk/Data-Science/tree/master/project-movielens ,
 edx.rds file under https://www.dropbox.com/s/xjopbrd1a3t67s8/edx.rds?dl=0 ,
 train.rds file under https://www.dropbox.com/s/xjopbrd1a3t67s8/edx.rds?dl=0 .
 
-MAKE SURE TO SET THE EVAL ARGUMENT OF THE CHUNKS IN LINES 60 AND 162 TO TRUE, IF YOU HAVE NOT DOWNLOADED "edx.rds", "final_holdout_test.rds", "train.rds" and "test.rds" FILES INTO A data/ DIRECTORY AS CODED IN CHUNK IN LINE 19!!!
-
-Make sure to have LaTeX 'float' and 'tinytex' packages installed when Knitting this document into pdf!
+MAKE SURE TO SET THE EVAL ARGUMENT OF THE CHUNKS 3 'MovieLens-Initiate' AND 6 'edx-Partition' IN LINES 62 AND 164 TO TRUE, IF YOU HAVE NOT DOWNLOADED "edx.rds", "final_holdout_test.rds", "train.rds" and "test.rds" FILES INTO A data/ DIRECTORY AS CODED IN CHUNK IN LINE 19!!!
+Computationally intense code has been put under comment mode or eval=FALSE. Make sure to have LaTeX (MiKTeX on Windows) and the 'float' and 'tinytex' packages installed when Knitting this document into pdf! Knitting takes around 20 minutes on my machine.
 -->
 ```{r Essential-downloads, echo=FALSE, message=FALSE, warning=FALSE}
 dl1 <- "data/edx.rds"
@@ -34,14 +34,11 @@ if(!file.exists(dl4))
   download.file("https://github.com/dblnk/Data-Science/blob/master/project-movielens/data/test.rds", dl4)
 ```
 
-
-
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(collapse=TRUE, fig.pos = 'H', fig.align= 'center', echo = FALSE,  dpi = 72)
+knitr::opts_chunk$set(collapse=TRUE, fig.pos = 'H', fig.align= 'center', echo = FALSE,  dpi = 300, dev = 'png')
 if(!require(lubridate)) install.packages("lubridate", repos = "http://cran.us.r-project.org")
 if(!require(broom)) install.packages("broom", repos = "http://cran.us.r-project.org")
 if(!require(dslabs)) install.packages("dslabs", repos = "http://cran.us.r-project.org")
-if(!require(purrr)) install.packages("purrr", repos = "http://cran.us.r-project.org")
 if(!require(gridExtra)) install.packages("gridExtra", repos = "http://cran.us.r-project.org")
 if(!require(scales)) install.packages("scales", repos = "http://cran.us.r-project.org")
 if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
@@ -312,7 +309,7 @@ p2 <- temp %>%
   ggtitle("Number of ratings per movie")+
   theme(plot.title = element_text(hjust=0.5, size=10))
 
-grid.arrange(p1, p2, nrow =1) #%>% knitr::caption = "\\textit{Example of entries in the MovieLens database}"
+grid.arrange(p1, p2, nrow =1)
 
 ```
 
@@ -323,7 +320,7 @@ We started building our model by accounting for the movie effect $m_{i}$ for mov
 
 and calculated $\hat{m}_{i}$ by simply subtracting $\hat{\mu}$ from $\bar{R_{i}}$. We also defined a tuning parameter $\lambda$ to penalize predictions of rarely reviewed movies and regularized the effect by the amount of reviews that a movie has received to avoid over- or underestimation of rarely rated movies. We probed a range of $\lambda$ and examined which value of $\lambda$  minimizes the RMSE of the prediction in the test set.  
 
-```{r Movie-effect-Regul, fig.cap='Movie effect regularization',  out.height='30%', echo=FALSE, results='asis', warning=FALSE}
+```{r Movie-effect-Regul, fig.cap='Movie effect regularization',  out.height='25%', echo=FALSE, results='asis', warning=FALSE}
 
 l <- seq(0, 10, 1)
 movie_rmses <- sapply(l, function(l){
@@ -334,6 +331,8 @@ movie_rmses <- sapply(l, function(l){
     mutate(r_hat = global_mean + m_i) %>% pull(r_hat)
   RMSE(test$rating, r_hat)
 })
+
+par(mar=c(3,3,0.5,0.5))
 plot(l,movie_rmses, xlab= "lambda", ylab="RMSE", mgp=c(1.7,0.5,0))
 # A tuning parameter l of 5 seems to be optimal. And our RMSE is decreased by 0.164! Now it is 0.943.
 
@@ -409,7 +408,7 @@ Our estimate for $u_{j}$ is therefore:
 \begin{center} $ \hat{u}_{j}= R_{i,j} - \hat{\mu} - \hat{m}_{i} $ \end{center}  
 Further we regularize the effect by the amount of reviews that this user has contributed to the train set.
 
-```{r User-effect-Regul, fig.cap='User effect regularization', fig.align='center',  out.height='30%',echo=FALSE, results='asis', warning=FALSE}
+```{r User-effect-Regul, fig.cap='User effect regularization', fig.align='center',  out.height='25%',echo=FALSE, results='asis', warning=FALSE}
 l <- seq(0, 10, 1)
 user_movie_rmses <- sapply(l, function(l){
   u_j <- train %>% group_by(userId) %>% 
@@ -420,6 +419,7 @@ user_movie_rmses <- sapply(l, function(l){
   RMSE(test$rating, r_hat)
 })
 
+par(mar=c(3,3,0.5,0.5))
 plot(l,user_movie_rmses, xlab= "lambda", ylab="RMSE", mgp=c(1.7,0.5,0))
 
 # A tuning parameter l of 5 is optimal to minimize the RMSE by another 0.0777 points! Now it is 0.8654.
@@ -751,6 +751,7 @@ genre_regul <- sapply(l, function(i) {
   #Does genre improve our fit over the movie/user/rating_pa model?
 })
 
+par(mar=c(3,3,0.5,0.5))
 plot(l, genre_regul,xlab= "lambda", ylab="RMSE", mgp=c(1.7,0.5,0))
  
 # The minimal RMSE is obtained using l = 400 ! Let's use the l = 400 column of the mov_genre_means matrix as our final g_i estimate and add it to train and test sets.
@@ -793,7 +794,7 @@ p9
 We observed some time-dependency with movies created before the 1940s having slightly positive residuals. In addition, there were troughs around 1980 and 1995, resulting in slightly negative residuals (Fig. 11). We deemed it worth to account for these effects. Thus, we add the effect of the year $y_{i}$ for a movie $i$ to our model:  
 \begin{center} $R_{i,j} = \mu + m_{i} + u_{j} + a_{i} + g_{i} + y_{i} + \epsilon_{i,j}$ \end{center}
 
-```{r Year-effect, fig.cap='Year effect regularization', fig.align='center', out.height='30%', echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+```{r Year-effect, fig.cap='Year effect regularization', fig.align='center', out.height='25%', echo=FALSE, results='asis', message=FALSE, warning=FALSE}
 
 rm(g, genre_list, gs, m_i, med_genre_rating, mov_genre_means, p7, p8, stats, genre_crowded, genre_regul, genre_sizes, genre_values, unique_genres)
 
@@ -850,6 +851,8 @@ year_reg_model_rmses <- sapply(l, function(l){
   year_reg_genre_rmse <- RMSE(test$rating, (global_mean + test$yr_i_reg + test$g_i + test$rate_pa_i + test$m_i + test$u_j))
 }
 )
+
+par(mar=c(3,3,0.5,0.5))
 plot(l, year_reg_model_rmses, xlab= "lambda", ylab="RMSE", mgp=c(1.7,0.5,0))
 
 
@@ -1072,6 +1075,9 @@ userxgenre_rmses <- sapply(l, function(l){
   r_hat <- test %>% mutate(r_hat= r_hat + g_ij_reg) %>% pull(r_hat)
   RMSE(test$rating, r_hat)
   })
+
+
+par(mar=c(3,3,0.5,0.5))
 plot(l, userxgenre_rmses)
 min(userxgenre_rmses)
 l[which.min(userxgenre_rmses)]
@@ -1137,8 +1143,10 @@ temp %>% ggplot(aes(x=genre, y=residual, group=userId, color=factor(userId)))+
 
 We took the averaged users' residuals $\hat{g}_{j,k}$ and then averaged these over the genres of each rated movie in the training set to obtain the effect estimate $\hat{g}_{j,i}$. Regularization by the amount of submitted ratings per user improved the RMSE at an optimal tuning parameter $\lambda$ of 20 (Fig. 15). 
 
-```{r Genre-user-regul, fig.cap='Regularization of genre-user effects', fig.align='center', out.height='30%',echo=FALSE, message=FALSE, warning=FALSE}
+```{r Genre-user-regul, fig.cap='Regularization of genre-user effects', fig.align='center', out.height='25%',echo=FALSE, message=FALSE, warning=FALSE}
 df <- data.frame(userxgene_rmses=c(0.8523471, 0.8506877, 0.8503473, 0.8503779, 0.8505495, 0.8507806, 0.8510362, 0.8512996, 0.8515626, 0.8518207, 0.8520716), l=seq(0,100,10))
+
+par(mar=c(3,3,0.5,0.5))
 plot(df$l, df$userxgene_rmses, xlab= "lambda", ylab="RMSE", mgp=c(1.7,0.5,0))
 
 dl2 <- "coeff/train_genre_user_effect.rds"
@@ -1356,3 +1364,10 @@ We have demonstrated that it is possible to devise a recommendation system based
 By applying regularization, where warranted, we ensured to prevent overfitting of our model. Indeed, the RMSE when applying the model with regularization was virtually the same on our test set and the final holdout validation set.
 
 It is conceivable that the recommendation system can be improved further. We have not taken into account individual user preferences for certain movie characteristics other than genre. A matrix factorization approach could have utility in explaining preferences of specific users for certain movie types, such as artsy as opposed to blockbuster movies, or for particular actors. In addition, our prediction system only allows us to extrapolate to movies and users that were contained in our training data set. To build a recommendation system that can predict ratings of novel movies, it might be warranted to explore the power of movie title effects. Some movie titles might contain additional information. For instance, we know from experience that sequels are likely to do worse than the original pilot movies. On the other hand, users that had rated a pilot and its sequel movie highly, might want to watch the second sequel. Furthermore, a text mining language analysis of movie titles, by for instance sentiment analysis, could be used to train an algorithm by assessing if certain terms associate with better or worse ratings. This would allow for building a true recommendation system that can make a judgement based on genre and title of movies that have not been part of a training data set, but also incorporate known genre preferences of particular users.
+
+\newpage
+## SESSION INFORMATION
+```{r Session-Info, echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+sessionInfo()
+```
+
