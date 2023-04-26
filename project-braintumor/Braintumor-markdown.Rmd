@@ -1,7 +1,7 @@
 ---
 title: "Brain tumor prediction model - HarvardX Data science Capstone assignment #2"
 author: "edX learner DBel_17"
-date: "April 22nd, 2023"
+date: "April 25nd, 2023"
 bibliography: citations.bib
 csl: london-south-bank-university-numeric.csl
 output:
@@ -10,76 +10,100 @@ output:
 header-includes:
   - \usepackage{float}
 ---
+<!-- THIS PROJECT IS AVAILABLE UNDER https://github.com/dblnk/Data-Science/tree/master/project-braintumor 
 
+Make sure to run the downloads in Chunk 'Essential-downloads'. Otherwise, set eval=TRUE in the the Chunk 'Preprocessing2' (line 110). Citations and reference style have to be downloaded for document to knit properly (included in 'Essential-downloads' chunk).
+Make sure to have LaTeX (MiKTeX on Windows) and the 'float' and 'tinytex' packages installed when Knitting this document into pdf (run 'setup' chunk in line 59!
+-->
 ```{r Essential-downloads, echo=FALSE, message=FALSE, warning=FALSE}
-dl <- "data/brain-tumor.zip"
-if(!file.exists(dl))
-  download.file("https://www.kaggle.com/datasets/jakeshbohaju/brain-tumor/download?datasetVersionNumber=3", dl)
-
-dl <- "data/archive.zip"
+dl1 <- "data/brain-tumor.zip"
+if(!file.exists(dl1))
+  download.file("https://github.com/dblnk/Data-Science/raw/master/project-braintumor/data/brain-tumor.zip", dl1)
 brain_tumor <- "data/brain-tumor/Brain Tumor.csv"
 if(!file.exists(brain_tumor))
   unzip(dl, exdir="data/brain-tumor")
+
+dl2 <- "data/train.rds"
+if(!file.exists(dl2))
+  download.file("https://github.com/dblnk/Data-Science/blob/master/project-braintumor/data/train.rds", dl2)
+
+dl3 <- "data/test.rds"
+if(!file.exists(dl3))
+  download.file("test.rds", dl3)
+
+dl4 <- "data/dev.rds"
+if(!file.exists(dl4))
+  download.file("https://github.com/dblnk/Data-Science/blob/master/project-braintumor/data/dev.rds", dl4)
+
+dl5 <- "data/final_holdout.rds"
+if(!file.exists(dl5))
+  download.file("https://github.com/dblnk/Data-Science/blob/master/project-braintumor/data/final_holdout.rds", dl5)
+
+dl6 <- "citations.bib"
+if(!file.exists(dl6))
+  download.file("https://github.com/dblnk/Data-Science/blob/master/project-braintumor/citations.bib", dl6)
+
+dl7 <- "london-south-bank-university-numeric.csl"
+if(!file.exists(dl7))
+  download.file("https://github.com/dblnk/Data-Science/blob/master/project-braintumor/london-south-bank-university-numeric.csl", dl7)
+
+dl8 <- "models/train_gamloess.rds"
+if(!file.exists(dl8))
+  download.file("https://github.com/dblnk/Data-Science/blob/master/project-braintumor/models/train_gamloess.rds", dl8)
+
+dl9 <- "models/dev_gamloess.rds"
+if(!file.exists(dl9))
+  download.file("https://github.com/dblnk/Data-Science/blob/master/project-braintumor/models/dev_gamloess.rds", dl9)
 ```
 
-
 ```{r setup, include=FALSE}
-if(!require(knitr)) install.packages("knitr", repos = "http://cran.us.r-project.org")
 knitr::opts_chunk$set(collapse=TRUE, fig.pos = 'H', fig.align= 'center', echo = FALSE,  dpi = 72)
 if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
 if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
 if(!require(gbm)) install.packages("gbm")
 if(!require(gam)) install.packages("gam")
 if(!require(jpeg)) install.packages("jpeg", repos = "http://cran.us.r-project.org")
-if(!require(broom)) install.packages("broom", repos = "http://cran.us.r-project.org")
 if(!require(dslabs)) install.packages("dslabs", repos = "http://cran.us.r-project.org")
-if(!require(purrr)) install.packages("purrr", repos = "http://cran.us.r-project.org")
 if(!require(gridExtra)) install.packages("gridExtra", repos = "http://cran.us.r-project.org")
 if(!require(scales)) install.packages("scales", repos = "http://cran.us.r-project.org")
-if(!require(matrixStats)) install.packages("matrixStats", repos = "http://cran.us.r-project.org")
 if(!require(ggrepel)) install.packages("ggrepel", repos = "http://cran.us.r-project.org")
 if(!require(tinytex)) install.packages("tinytex", repos = "http://cran.us.r-project.org")
 if(!require(tinytex)) tinytex::install_tinytex()
 if(!require(float)) install.packages("float", repos = "http://cran.us.r-project.org")
 if(!require(pandoc)) install.packages("pandoc", repos = "http://cran.us.r-project.org")
-if(!require(tibble)) install.packages("tibble", repos = "http://cran.us.r-project.org")
 ```
 
 ## INTRODUCTION
 
 Glioma is the most frequent brain tumor and consists of cells that most closely resemble those brain cells which normally fulfill supportive and structural tasks, i.e. glial and astrocyte cells, as opposed to the signal transmitting neurons [@glioma2012]. Clinical diagnosis and prognosis of glioma depend on magnetic resonance tomography (MRI) imaging and evaluation of the scans by experienced radiologists. In the past decade, machine-learning methods have been devised to identify and demarcate different regions of brain tumors, which is referred to as brain tumor segmentation. The goal of these endeavors is to facilitate and objectify tumor diagnosis. Precise diagnosis is at the core of appropriate patient care and prognostic projections [@menze2012].
 
-In the present project, a pre-processed dataset was retrieved from the Kaggle repository [@bohaju2020], containing a series of MRI scan images from patients diagnosed with glioma. The scans show either completely normal or tumor-infiltrated areas of tissue. Each image was assigned a ground truth allowing for evaluation of prediction algorithms. Although the purpose of the original dataset was to classify and segment the MRI sections into areas of either normal tissue or four different types of tumorous tissue [@menze2012, @brats2015], the creator of the Kaggle dataset had simplified the task. The outcome measure now only differentiates between images strictly positive or negative for the appearance of a tumor. Thus, it becomes a binary classification challenge.
+In the present project, a pre-processed dataset was retrieved from the Kaggle repository [@bohaju2020], containing a series of MRI scan images from patients diagnosed with glioma. The scans show either completely normal or tumor-infiltrated areas of tissue. Each image was assigned a ground truth allowing for evaluation of prediction algorithms. Although the purpose of the original dataset was to classify and segment the MRI sections into areas of either normal tissue or four different types of tumorous tissue [@menze2012, @brats2015], the creator of the Kaggle dataset had simplified the task. Now, the outcome measure differentiates between images strictly positive or negative for the appearance of a tumor. Thus, it becomes a binary classification challenge.
 
-Furthermore, the texture features of the images were extracted using mathematical methods applying the gray-level co-occurrence matrix (GLCM) [@texture1973, @features2012] resulting in first-order and second-order features. First-order features, namely variance (or standard deviation), kurtosis, skewness and mean, provide a measure of how grey pixels are overall distributed across the image, while second-order features such as angular second moment (ASM), entropy, contrast or dissimilarity quantify the relationship between pixels within the image and can be used to extrapolate to the coarseness or smoothness of an image.
+Furthermore, the texture features of the images were extracted using mathematical methods applying the gray-level co-occurrence matrix (GLCM) [@texture1973, @features2012] yielding first-order and second-order image features. First-order features, namely variance, standard deviation, kurtosis, skewness and mean, provide a measure of how grey pixels are distributed across the image overall, while second-order features such as angular second moment (ASM), entropy, contrast or dissimilarity quantify the relationship between pixels within the image and can be used to extrapolate to the coarseness or smoothness of an image.
 
 ## METHODS
-
 ```{r Preprocessing, eval=TRUE, message=FALSE, include=FALSE}
 options(digits=7)
+brain_tumor <- "data/brain-tumor/Brain Tumor.csv"
 bt <- read.csv2(file=brain_tumor, sep=",", dec=".")
 bt[,3:14] <- signif(bt[,3:14], digits=5)
 bt[,15] <- round(bt[,15], digits=3)
 str(bt)
 names(bt)
 
-
 #check value structure
 summary(bt)
 # check frequency of the outcome
 prop.table(table(bt$Class))
 ```
+
 ### Data partitioning
 To independently validate our model, we partitioned the initial dataset containing `r dim(bt)[1]` images into a development and a final holdout dataset, using a 90/10 partition, leaving enough data for training. The development data were further split into a training and test set, again using a 90/10 partition. Models were then trained and performance assessed. Finally, the models were trained on the complete development set to feed as much data as possible and the prediction algorithm evaluated on the final holdout set.
-
-### Assessing model performance
-Since we had a discrete binary outcome, we used Accuracy **A** as a measure of model performance which is defined as 
-\begin{center} $\mathbf{A} = \frac{TP +TN}{TP + TN + FP + FN}$, with T being "true", F being "false", P being "positive" and N "being negative". \end{center}
-Any model performance has to be measured against a random prediction which in the case of a binary outcome would have an accuracy of 50%.
 
 ### Feature selection
 There were 13 predictors present in the Kaggle dataset: **`r names(bt[,3:15])`**. Predictors with low variance were identified with nearZeroVar() from the *caret* package and thus **Coarseness** was removed. 
 ``` {r Preprocessing2, eval=FALSE, message=FALSE, include=FALSE}
+##### STEP 1: Data pre-processing #####
 #Simplify names
 bt <- bt %>% rename(StdDev = Standard.Deviation)
 
@@ -115,6 +139,7 @@ prop.table(table(test$Class))
 saveRDS(test, file="data/test.rds")
 saveRDS(train, file="data/train.rds")
 ```
+
 ```{r Feature-distribution, fig.cap='Outcome discrimination by features', out.height='40%', echo=FALSE, warning=FALSE, message=FALSE}
 options(digits=7)
 bt <- read.csv2(file=brain_tumor, sep=",", dec=".")
@@ -141,14 +166,21 @@ bp <- bt %>% pivot_longer(Mean:Correlation, names_to="parameter", values_to="val
 bp
 #ggsave("fig/boxplot_prd_outc.pdf")
 ```
-As can be seen from Fig. X, some features have more discriminative power than others and some like ASM and Entropy display almost the same distribution.
-To exclude redundant features and therefore to decrease the possibility of overfitting as well as to save computational resources, a filter method was applied examining the correlation and relationships between predictors among themselves and between predictors and the outcome. To presume that correlation is given, the Pearson correlation coefficient had to be greater than 0.7. Deterministic relationships between features spoke in favor of retaining only the one with the highest correlation to the outcome, while stochastic relationships were weighed in favor of retaining a feature in a correlation cluster. To not lose important information, the decision to exclude features was therefore conservative.
-A pairwise scatter plot grid (Fig. X) and a pairwise correlation matrix (Fig. X) guided the selection.
 
-```{r Feature-behavior, fig.cap='Scatter plots between features and outcome', out.height='90%', echo=FALSE, warning=FALSE, message=FALSE}
+As can be seen in Fig. 1, some features have more discriminative power than others and some like ASM and Entropy display almost the same distribution.
+
+To exclude redundant features and therefore to decrease the possibility of overfitting, to reduce dimensionality, as well as to save computational resources, a filter method was applied examining the correlation and relationships between predictors among themselves and between predictors and the outcome. 
+
+To assume high correlation, the Pearson correlation coefficient had to be greater than 0.7. Deterministic relationships between features spoke in favor of retaining only the one with the highest correlation to the outcome, while stochastic relationships were weighed in favor of retaining a feature in a correlation cluster. To not lose important information, the decision to exclude features was therefore conservative.
+A pairwise scatter plot grid (Fig. 2) and a pairwise correlation matrix (Fig. 3) guided the selection.
+
+```{r Feature-behavior, fig.cap='Scatter plots between features and outcome.', out.extra='angle=90', fig.dim = c(12, 8), echo=FALSE, warning=FALSE, message=FALSE}
+##### STEP 2: Data exploration #####
 #load the datasets
 test <- readRDS(file="data/test.rds")
 train <- readRDS(file="data/train.rds")
+
+#Image column defines image name and Class column defines if the image shows a tumor or not (1 = Tumor, 0 = Non-Tumor)
 
 # reshuffle columns to accurately reflect first- and second order features and sort them according to their correlations (see further below)
 train <- train %>% select(Image, Class, Mean, Variance, StdDev, Energy, ASM, Entropy, Homogeneity, Contrast, Dissimilarity, Skewness, Kurtosis, Correlation)
@@ -156,34 +188,37 @@ train <- train %>% select(Image, Class, Mean, Variance, StdDev, Energy, ASM, Ent
 test <- test %>% select(Image, Class, Mean, Variance, StdDev, Energy, ASM, Entropy, Homogeneity, Contrast, Dissimilarity, Skewness, Kurtosis, Correlation)
 
 
-par(mar = c(2, 2, 4, 2), xpd=TRUE, font.main=2, cex.main=1)
+##### STEP 3: Selection of a subset of predictors using a filter method. This helps reducing computational power by removing redundant and thus low-information-content features.#####
+par(mar=c(0,0,1,0), xpd=TRUE, font.main=2, cex.main=1)
 colors <- c("#2e8b57", 
             "#F8766D")
-# plot the data in 10% of the train dataset
+# pairwise scatter plot the data in 10% of the train dataset
 set.seed(1)
 train %>% select(-1) %>% slice_sample(prop=0.1) %>%
-  plot(., pch=1, lwd=0.5, cex=0.4, col=colors[factor(.$Class)], main="Scatter plots between features and outcome")
-# position of legend will vary depending on machine and installation
-legend(-0.5, 1.5, legend = c("no tumor", "tumor"),
+  pairs(., pch=19, lwd=0.5, cex=0.6, col=colors[factor(.$Class)], lower.panel=NULL, main="Scatter plots between features and outcome")
+# position of legend might vary depending on machine and installation
+legend(x=c(0, 0.15), y=c(0.1,0.22), legend = c("no tumor", "tumor"),
        pch = 19,
-       col = colors, cex=0.5)
+       col = colors)
 ```
 
-```{r Feature-selection, fig.cap='Correlation between features and outcome', out.height='38%', echo=FALSE, warning=FALSE, message=FALSE}
-par(mar = c(6, 6, 4, 2), xpd=TRUE)
+```{r Feature-selection, fig.cap='Correlation between features and outcome. Deep red represents stronlgy positive and deep blue strongly negative correlation.', out.height='45%', echo=FALSE, warning=FALSE, message=FALSE}
+##### STEP 3: Selection of a subset of predictors using a filter method. This helps reducing computational power by removing redundant and thus low-information-content features.#####
+# compute correlation matrix
 corel <- cor(train[,2:14])
 
 # heatmap the correlation matrix and add matching correlation coefficients inside the cells of the matrix with a for loop
+par(mar = c(5, 5, 1.5, 2), xpd=TRUE, font.main=2, cex.main=1)
 pal <-  colorRampPalette(c("blue", "white", "red"))(100)
 image(corel, axes=FALSE, col = pal)
 names <- names(train[,2:14])
 axis(side = 1, at = seq(0,1.0, length.out=13), labels = names, las=2, cex.axis=0.75)
 axis(side = 2, at = seq(0,1.0, length.out=13), labels = names, las=2, cex.axis=0.75)
-text(0.5,1.1,"Correlation between features and outcome")
+title(main="Correlation between features and outcome")
 # for loop to add corresponding values inside the heatmap
 for(i in 1:nrow(corel)) {
   for(j in 1:ncol(corel)) {
-    text(((j-1)*(1/(ncol(corel)-1))), ((i-1)*(1/(nrow(corel)-1))), round(corel[i,j], 2), col="black", cex=0.5)
+    text(((j-1)*(1/(ncol(corel)-1))), ((i-1)*(1/(nrow(corel)-1))), round(corel[i,j], 2), col="black", cex=0.7)
   }
 }
 ```
@@ -197,18 +232,17 @@ Dissimilarity and Contrast are highly correlated. Dissimilarity has higher corre
 Kurtosis and Skewness are highly correlated and have a deterministic relationship. Skewness has the stronger correlation to Class and was retained.
 
 In summary, we kept the following 7 of the 12 non-zero-variance features for training:
-**Variance, Mean, Energy, Homogeneity, Skewness, Dissimilarity and Correlation**.
+**Variance**, **Mean**, **Energy**, **Homogeneity**, **Skewness**, **Dissimilarity** and **Correlation**.
 
 ### Scan visualization
-MRI scans were read with the readJPEG() function of the *jpeg* package and visualized using the base *R* plot(as.raster()) function. An example of randomly selected images of normal and tumorous tissues is provided in Fig. X. It can be seen that all sections are in the transverse plane. 
-```{r Brain-scans, fig.cap='Examples of MRI images', results='asis', out.height='50%', echo=FALSE, warning=FALSE, message=FALSE}
+MRI scans were read with the readJPEG() function of the *jpeg* package and visualized using the base *R* plot(as.raster()) function. An example of randomly selected images of normal and tumorous tissues is provided in Fig. 4. It can be seen that all sections are in the transverse plane. 
+```{r Brain-scans, fig.cap='Examples of MRI images. N stands for normal, T for tumor.', fig.dim=c(8,4), echo=FALSE, warning=FALSE, message=FALSE}
 #Let's visualize 16 random images, half tumor, half normal
 set.seed(1997)
 img <- c(sample(train$Image[which(train$Class==0)] , 8), sample(train$Image[which(train$Class==1)] , 8))
 
 # Letters signify the true class, T for "tumor" or "1" and N for "normal" or "0"
-  par(mar = c(2, 1, 1, 1), xpd=TRUE)
-  par(mfrow = c(4,4))
+  par(mar=c(0,0,1,0), mfrow = c(4,4), oma = c(0,0,0,0), xpd=TRUE)
   for (i in img) {
     image <- jpeg::readJPEG(paste0("data/brain-tumor/Brain Tumor/",i,".jpg"))
     title <- i
@@ -217,3 +251,465 @@ img <- c(sample(train$Image[which(train$Class==0)] , 8), sample(train$Image[whic
     text(x=25, y=30, ifelse(train$Class[which(train$Image==i)] == 1, "T", "N"), cex=3, col= ifelse(train$Class[which(train$Image==i)] == 1, "red", "#2e8b57"))
   }
 ```
+
+### Model training
+Six different machine learning algorithms supported by the *caret* [@caret] package were selected, then tuned and trained on the training data set. The commonly used, 10-fold cross-validation was used in order to prevent overfitting, while keeping the validation set for training similarly sized as the eventual test and final holdout evaluation sets. 
+
+We selected algorithms suitable for classification tasks: the k-nearest-neighbors (caret method: "knn"), generalized linear model ("glm", suitable to model logistic regression), locally estimated scatterplot smoothing ("gamLoess", only *span* was tuned keeping *degree* constant at 1), classification trees ("rpart"), random forests ("rf") and gradient boosting machines ("gbm"). Gradient boosting machines are similar to random forests, but they construct trees sequentially and add weights to observations based on the errors of the previous tree. 
+
+Based on its comparatively poor performance, we excluded the knn model from further consideration. The remaining five models were used to generate a majority ensemble vote to predict the outcome variable:
+\begin{center}  $E(Y|\mathbf{X}) = \begin{cases} 1 & \text{if} \frac{1}{B}\sum_{b=1}^{B} \hat{Y}_{b} > 0.5\\ 0 & \text{otherwise} \end{cases}$,
+with $B$ being the number of models providing the prediction $\hat{Y}_{b}$  \end{center}
+
+### Assessing model performance
+Since we have a discrete, binary outcome, we used accuracy *A* as a measure of model performance which is defined as 
+\begin{center} ${A} = \frac{TP +TN}{TP + TN + FP + FN}$, with T being "true", F "false", P "positive" and N "negative". \end{center}
+Any model performance has to be measured against a random prediction which in the case of a binary outcome would have an accuracy of 50%.
+```{r Random-pred, eval=FALSE, warning=FALSE, message=FALSE}
+# random prediction with Monte-Carlo simulation to confirm that the accuracy of a prediction that does not do better than chance is 50 %, since there are only two outcomes
+set.seed(1997)
+guess <- replicate(100, {
+  random <- sample(factor(c(0, 1)), length(test$Class), replace=TRUE)
+          mean(random == factor(test$Class))}
+          )
+mean(guess)
+```
+Accuracy was assessed on the test data set to gauge robustness of the trained models. Eventually it was evaluated on the final holdout test.
+
+\newpage
+
+## RESULTS
+```{r Train-knn-glm, echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+##### STEP 4: Training models #####
+
+### STEP 4.1
+# We train a k-nearest neighbor model
+set.seed(1995)
+ # train_knn <- train(factor(Class) ~ Variance + Mean + Energy + Homogeneity + Skewness + Dissimilarity + Correlation, data=train, method="knn", trControl=trainControl(method="cv", number=10), tuneGrid = data.frame(k = seq(1,51,2)))
+train_knn <- train(factor(Class) ~ Variance + Mean + Energy + Homogeneity + Skewness + Dissimilarity + Correlation, data=train, method="knn", trControl=trainControl(method="cv", number=10), tuneGrid = data.frame(k = 5))
+
+test_knn <- predict(train_knn, newdata=test)
+acc_knn <- mean(test_knn == factor(test$Class))
+#knn performs rather poorly (compare to models below) with the highest accuracy of 83.2% at k = 5, suggesting overfitting.
+miss_knn <- which(test_knn != factor(test$Class)) # which scans (row indices) were misclassified by knn
+
+# examine how two features from different correlation clusters, with highest (absolute) correlation to outcome, can separate the outcome and how the missed predictions map
+plot_knn <- test %>% mutate(acc = ifelse(test_knn != factor(test$Class), 1, 0)) %>% ggplot(aes(Energy, Dissimilarity, shape = factor(Class, labels=c("normal","tumor")), color=factor(acc, labels=c("hit","miss")), size=factor(acc))) +
+  geom_point(alpha=0.5)+  
+  scale_color_manual(values = c("#2e8b57", "#F8766D"))+
+  scale_size_manual(values = c(2,4))+
+  ggtitle("kNN")+
+  theme(plot.title = element_text(size=12,hjust=0.5))+
+  guides(color=guide_legend(title="prediction"), shape=guide_legend(title="True outcome"), size=FALSE)
+
+### STEP 4.2
+#  We train a generalized linear model
+train_glm <- train(factor(Class) ~ Variance + Mean + Energy + Homogeneity + Skewness + Dissimilarity + Correlation, data = train, method="glm", trControl=trainControl(method="cv", number=10))
+# train_glm$results
+# tidy(train_glm$finalModel)
+test_glm <- predict(train_glm, newdata=test)
+acc_glm <- mean(test_glm == factor(test$Class))
+
+# Accuracy: [1] 0.9852507
+miss_glm <- which(test_glm != factor(test$Class)) # which scans (row indices) were misclassified by glm
+
+set.seed(1)
+hits_glm <- sample(which(test_glm == factor(test$Class)), 9) # which scans (row indices) were correctly classifued by glm
+
+# highlight the misclassified cases
+plot_glm <- test %>% mutate(acc = ifelse(test_glm != factor(test$Class), 1, 0)) %>% ggplot(aes(Energy, Dissimilarity, shape = factor(Class, labels=c("normal","tumor")), color=factor(acc, labels=c("hit","miss")), size=factor(acc))) +
+  geom_point(alpha=0.5)+  
+  scale_color_manual(values = c("#2e8b57", "#F8766D"))+
+  scale_size_manual(values = c(2,4))+
+  ggtitle("glm")+
+  theme(plot.title = element_text(size=12,hjust=0.5))+
+  guides(color=guide_legend(title="prediction"), shape=guide_legend(title="True outcome"), size=FALSE)
+```
+
+### k-nearest neighbors (kNN)
+The kNN algorithm was found to yield the highest accuracy of `r round(100*acc_knn, 1)`% at $k = 5$.
+
+### Logistic regression
+Logistic regression via a generalized linear model (glm) provided an accuracy of `r round(100*acc_glm, 1)`%, a much better performance than the kNN model. 
+```{r Train-loess, echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+### STEP 4.3
+ # too computationally intensive, # load model instead
+set.seed(1)
+if(!file.exists("models/train_gamloess.rds")) {
+  train_gamloess<- train(factor(Class) ~ Variance + Mean + Energy + Homogeneity + Skewness + Dissimilarity + Correlation, data = train, method="gamLoess", trControl=trainControl(method="cv", number=10), tuneGrid=data.frame(span = 0.16, degree=1))
+} else {train_gamloess <- readRDS("models/train_gamloess.rds")}
+
+test_loess <- predict(train_gamloess, newdata=test)
+acc_loess <- mean(test_loess == factor(test$Class))
+
+plot_loess <- test %>% mutate(acc = ifelse(test_loess != factor(test$Class), 1, 0)) %>% ggplot(aes(Energy, Dissimilarity, shape = factor(Class, labels=c("normal","tumor")), color=factor(acc, labels=c("hit","miss")), size=factor(acc))) +
+  geom_point(alpha=0.5)+  
+  scale_color_manual(values = c("#2e8b57", "#F8766D"))+
+  scale_size_manual(values = c(2,4))+
+  ggtitle("loess")+
+  theme(plot.title = element_text(size=12,hjust=0.5))+
+  guides(color=guide_legend(title="prediction"), shape=guide_legend(title="True outcome"), size=FALSE)
+
+# which images were misclassified
+miss_loess <- which(test_loess != factor(test$Class))
+# random correctly classified images
+set.seed(1)
+hits_loess  <- sample( which(test_loess == factor(test$Class)), 9)
+
+```
+
+### Locally estimated scatterplot smoothing (loess)
+A loess smooth function yielded the highest accuracy of `r round(100*acc_loess, 1)`% at a *span* of `r eval(parse(text = train_gamloess$bestTune[1]))`. 
+
+```{r Train-rpart, echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+### STEP 4.4 Decision tree
+train_rpart <- train(factor(Class) ~ Variance + Mean + Energy + Homogeneity + Skewness + Dissimilarity + Correlation, data = train, method="rpart", trControl=trainControl(method="cv", number=10), tuneGrid=data.frame(cp=0.001), minsplit=50, minbucket=21)
+
+test_rpart <- predict(train_rpart, newdata=test, type="raw")
+acc_rpart <- mean(test_rpart == factor(test$Class))
+
+# Accuracy: [1] 0.9882006
+miss_rpart <- which(test_rpart != factor(test$Class))
+set.seed(1)
+hits_rpart <- sample( which(test_rpart == factor(test$Class)), 9)
+
+# optimization did not improve the prediction by much!
+
+plot_rpart <- test %>% mutate(acc = ifelse(test_rpart != factor(test$Class), 1, 0)) %>% ggplot(aes(Energy, Dissimilarity, shape = factor(Class, labels=c("normal","tumor")), color=factor(acc, labels=c("hit","miss")), size=factor(acc))) +
+  geom_point(alpha=0.5)+  
+  scale_color_manual(values = c("#2e8b57", "#F8766D"))+
+  scale_size_manual(values = c(2,4))+
+  ggtitle("Class. tree")+
+  theme(plot.title = element_text(size=12,hjust=0.5))+
+  guides(color=guide_legend(title="prediction"), shape=guide_legend(title="True outcome"), size=FALSE)
+```
+
+```{r Tree, echo=FALSE, message=FALSE, warning=FALSE, fig.cap='Decision tree obtained by "rpart" algorithm with cp = 0.001, minsplit = 50 and minbucket = 21. 0 is "normal", 1 is "tumor".', out.height='45%'}
+# plotting the decision tree
+par(mar = c(0, 0, 1, 0), xpd=TRUE, font.main=2, cex.main=0.85)
+plot(train_rpart$finalModel, margin=0.02)
+text(train_rpart$finalModel, cex = 0.8)
+title(main="Decision tree")
+
+```
+### Classification trees
+We tuned a classification tree model and obtained optimal parameters for complexity: *cp* = 0.001 (minimum required improvement of the residual sum of squares to add a partition); the minimum number of observations to allow a further partition: *minsplit* = 50; and minimum amount of observations in each final node: *minbucket*= 21, resulting in an accuracy of `r round(100*acc_rpart, 1)`%.
+The obtained tree is displayed in Fig. 5.
+
+```{r Train-rf, echo=FALSE, message=FALSE, warning=FALSE, fig.cap='Decision tree obtained by "rpart" algorithm with cp = 0.001, minsplit = 50 and minbucket = 21. Node values of 0 for "normal" and 1 for "tumor".'}
+### STEP 4.5 Random forest 
+set.seed(2000)
+train_rf <- train(factor(Class) ~ Variance + Mean + Energy + Homogeneity + Skewness + Dissimilarity + Correlation, data = train, method="rf", trControl=trainControl(method="cv", number=10), tuneGrid=data.frame(mtry=4), nodesize=6)
+
+test_rf <- predict(train_rf, newdata=test, type="raw")
+acc_rf <- mean(test_rf == factor(test$Class))
+# Accuracy: [1]  0.9911504
+miss_rf <- which(test_rf != factor(test$Class))
+set.seed(1)
+hits_rf <- sample( which(test_rf == factor(test$Class)), 9)
+
+plot_rf <- test %>% mutate(acc = ifelse(test_rf != factor(test$Class), 1, 0)) %>% ggplot(aes(Energy, Dissimilarity, shape = factor(Class, labels=c("normal","tumor")), color=factor(acc, labels=c("hit","miss")), size=factor(acc))) +
+  geom_point(alpha=0.5)+  
+  scale_color_manual(values = c("#2e8b57", "#F8766D"))+
+  scale_size_manual(values = c(2,4))+
+  ggtitle("Random forest")+
+  theme(plot.title = element_text(size=12,hjust=0.5))+
+  guides(color=guide_legend(title="prediction"), shape=guide_legend(title="True outcome"), size=FALSE)
+```
+
+### Random forest
+For the training of a random forest model we obtained an optimal number of predictors (*mtry* parameter) of 4 and a minimum amount of observations in each final node (*nodesize* parameter) of 6. This resulted in an accuracy of `r round(100*acc_rf, 1)`%.
+```{r VarImp-rf, echo=FALSE}
+knitr::kable(row.names = TRUE, caption = "\\textit{Variable importance in random forest model}", varImp(train_rf)$importance %>% rename(Var.Import=Overall) %>% arrange(-Var.Import))
+```
+
+The obtained forest assigned the highest variable importance to **Energy**, followed by the highly correlated **Homogeneity** (*cf.* Fig. 3) and then **Dissimilarity** (Table 1).
+```{r Train-gbm, echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+### STEP 4.6 Gradient boosting machines
+train_gbm <-  train(factor(Class) ~ Variance + Mean + Energy + Homogeneity + Skewness + Dissimilarity + Correlation, data = train, method="gbm", tuneGrid=data.frame(n.trees = 150, interaction.depth=3, shrinkage=0.1, n.minobsinnode=10), trControl=trainControl(method="cv", number=10), distribution="bernoulli" )
+summary(train_gbm)
+
+test_gbm <- predict(train_gbm, newdata=test, type="raw")
+acc_gbm <- mean(test_gbm == factor(test$Class))
+# Accuracy: [1]  0.9911504
+miss_gbm <- which(test_gbm != factor(test$Class))
+set.seed(1)
+hits_gbm <- sample( which(test_gbm == factor(test$Class)), 9)
+
+plot_gbm <- test %>% mutate(acc = ifelse(test_gbm != factor(test$Class), 1, 0)) %>% ggplot(aes(Energy, Dissimilarity, shape = factor(Class, labels=c("normal","tumor")), color=factor(acc, labels=c("hit","miss")), size=factor(acc))) +
+  geom_point(alpha=0.5)+  
+  scale_color_manual(values = c("#2e8b57", "#F8766D"))+
+  scale_size_manual(values = c(2,4))+
+  ggtitle("Gradient boosting machine")+
+  theme(plot.title = element_text(size=12,hjust=0.5))+
+  guides(color=guide_legend(title="prediction"), shape=guide_legend(title="True outcome"), size=FALSE)
+```
+
+### Gradient boosting machines (GBM)
+Using an optimal set of parameters (*n.trees* = 150, *interaction.depth*=3, *shrinkage*=0.1, *n.minobsinnode* = 10) the GBM model reached an accuracy of `r round(100*acc_gbm, 1)`%, equivalent to the random forest, albeit the importance of **Energy** greatly outweighed all the other features (Table 2).
+```{r VarImp-gbm, echo=FALSE}
+knitr::kable(row.names = TRUE, caption = "\\textit{Variable importance in gradient boosting machine model}", varImp(train_gbm)$importance %>% rename(Var.Import=Overall) %>% arrange(-Var.Import))
+```
+
+### Ensemble
+Table 3 shows the accuracies of all six models obtained on the test set, as well as the accuracy obtained with the ensemble majority vote from the five more accurate models.
+```{r Model-comparison, echo=FALSE, message=FALSE, warning=FALSE, fig.cap='Prediction accuracy of the six examined models projected onto a Dissimilarity vs. Energy plot. Failed predictions in red ("miss").'}
+##### STEP 5: ensemble vote of models #####
+# ensemble method. convert the factors to outcome classes taking values 0 and 1.
+test_glm_n <- as.numeric(test_glm)-1
+test_loess_n <- as.numeric(test_loess)-1
+test_rpart_n <- as.numeric(test_rpart)-1
+test_rf_n <- as.numeric(test_rf)-1
+test_gbm_n<- as.numeric(test_gbm)-1
+# create an ensemble prediction based on majority vote
+ensemble <- (test_glm_n + test_loess_n + test_rpart_n + test_rf_n + test_gbm_n)/5
+test_ensemble <- ifelse(ensemble>0.5, 1, 0)
+#ensemble accuracy
+acc_ensemble <- mean(test_ensemble == test$Class)
+# misclassified by ensemble
+miss_ens <- which(test_ensemble != factor(test$Class))
+# randomly picked correct predictions
+set.seed(1)
+hits_rf <- sample( which(test_rf == factor(test$Class)), 9)
+
+test %>% select(Class, Energy, Dissimilarity) %>% 
+  mutate(kNN = test_knn, GLM = test_glm, Loess = test_loess, Class.Tree = test_rpart, Random.Forest = test_rf, Grad.Boost.Machine = test_gbm) %>% 
+  pivot_longer(-c(Class, Energy, Dissimilarity), values_to="Prediction", names_to="ML_model") %>%
+  mutate(acc = ifelse(Prediction!= factor(Class), 1, 0), ML_model = factor(ML_model, levels=c("kNN", "GLM", "Loess", "Class.Tree", "Random.Forest", "Grad.Boost.Machine"))) %>% 
+  ggplot(aes(Energy, Dissimilarity, shape = factor(Class, labels=c("normal","tumor")), color=factor(acc, labels=c("hit","miss")), size=factor(acc))) +
+geom_point(alpha=0.5)+  
+  scale_color_manual(values = c("#2e8b57", "red"))+
+  scale_size_manual(values = c(1,3))+
+  facet_wrap("ML_model", nrow=2, ncol=3)+
+  guides(color=guide_legend(title="prediction"), shape=guide_legend(title="True outcome"), size=FALSE)
+
+acc_compare <- data.frame(Model = c("kNN", "GLM", "Loess", "Class. tree", "Random forest", "GBM", "Ensemble"), Accuracy = c(acc_knn, acc_glm, acc_loess, acc_rpart, acc_rf, acc_gbm, acc_ensemble))
+
+acc_compare %>% knitr::kable(caption = "\\textit{Comparison of the accuracies of different models during training}")
+
+# which and what proportion of misclassified cases from the ensemble-integrated models are correctly predicted by kNN
+knn_vs_other <- 1 - mean(union(union(union(union(miss_glm, miss_loess), miss_rpart),miss_rf),miss_gbm)  %in%  miss_knn)
+```
+Curiously, the missed predictions by the more accurate models were mostly (`r round(100*knn_vs_other, 1)`%) correctly predicted by the kNN model (Fig. 6).
+
+The ensemble method (excluding kNN) finally yielded an accuracy of `r round(100*acc_ensemble, 1)`%. 
+```{r Cleanup, echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+rm(plot_gbm, plot_glm, plot_knn, plot_loess, plot_rf, plot_rpart, train, train_gamloess, train_gbm, train_glm, train_knn, train_rf, train_rf, test_ensemble, test_gbm, test_glm, test_knn, test_loess, test_rf, test_rpart, test_gbm_n,test_glm_n, test_loess_n, test_rf_n, test_rpart_n)
+```
+### Evaluation on the final holdout test
+
+We trained the final model on the combined development (train and test) set and assessed its performance on the final holdout validation set. 
+```{r Train-final,  echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+##### STEP 6: Train final model #####
+# train models with unpartitioned "dev" data set
+dev <- readRDS("data/dev.rds")
+
+set.seed(1995)
+dev_knn <- train(factor(Class) ~  Variance + Mean + Energy + Homogeneity + Skewness + Dissimilarity + Correlation, data = dev, method="knn", tuneGrid=data.frame(k=5), trControl=trainControl(method="cv", number=10))
+
+set.seed(1995)
+dev_glm <- train(factor(Class) ~  Variance + Mean + Energy + Homogeneity + Skewness + Dissimilarity + Correlation, data = dev, method="glm", trControl=trainControl(method="cv", number=10))
+
+set.seed(1995)
+#computationally intensive, better load the model 
+if(!file.exists("models/dev_gamloess.rds")) {
+  dev_gamloess <- train(factor(Class) ~ Variance + Mean + Energy + Homogeneity + Skewness + Dissimilarity + Correlation, data = dev, method="gamLoess", trControl=trainControl(method="cv", number=10), tuneGrid=data.frame(span=0.16, degree=1)) 
+} else {dev_gamloess <- readRDS("models/dev_gamloess.rds") }
+
+set.seed(1995)
+dev_rpart <- train(factor(Class) ~  Variance + Mean + Energy + Homogeneity + Skewness + Dissimilarity + Correlation, data = dev, method="rpart", trControl=trainControl(method="cv", number=10), tuneGrid=data.frame(cp=0.001), minsplit=50, minbucket=21)
+
+set.seed(1995)
+dev_rf <- train(factor(Class) ~ Variance + Mean + Energy + Homogeneity + Skewness + Dissimilarity + Correlation, data = dev, method="rf", trControl=trainControl(method="cv", number=10), tuneGrid=data.frame(mtry=4), nodesize=6)
+
+set.seed(1995)
+dev_gbm <-  train(factor(Class) ~  Variance + Mean + Energy + Homogeneity + Skewness + Dissimilarity + Correlation, data = dev, method="gbm", trControl=trainControl(method="cv", number=10), tuneGrid=data.frame(n.trees = 150, interaction.depth=3, shrinkage=0.1, n.minobsinnode=10) )
+
+##### STEP 7: Evalaute model performance #####
+final_holdout <- readRDS("data/final_holdout.rds")
+
+# predict outcomes in final_holdout set based on models trained on dev
+final_knn <- predict(dev_knn, newdata=final_holdout)
+acc_final_knn <- mean(final_knn == factor(final_holdout$Class))
+final_miss_knn <- which(final_knn != factor(final_holdout$Class))
+
+final_glm <- predict(dev_glm, newdata=final_holdout)
+acc_final_glm <- mean(final_glm == factor(final_holdout$Class))
+final_miss_glm <- which(final_glm != factor(final_holdout$Class))
+
+final_loess<- predict(dev_gamloess, newdata=final_holdout)
+acc_final_loess<- mean(final_loess == factor(final_holdout$Class))
+final_miss_loess <- which(final_loess != factor(final_holdout$Class))
+
+final_rpart<- predict(dev_rpart, newdata=final_holdout)
+acc_final_rpart <- mean(final_rpart == factor(final_holdout$Class))
+final_miss_rpart <- which(final_rpart != factor(final_holdout$Class))
+
+final_rf<- predict(dev_rf, newdata=final_holdout)
+acc_final_rf <- mean(final_rf == factor(final_holdout$Class))
+final_miss_rf <- which(final_rf != factor(final_holdout$Class))
+
+final_gbm<- predict(dev_gbm, newdata=final_holdout)
+acc_final_gbm<- mean(final_gbm == factor(final_holdout$Class))
+final_miss_gbm <- which(final_gbm != factor(final_holdout$Class))
+```
+
+```{r Final-Accuracy, echo=FALSE, message=FALSE, warning=FALSE,}
+# convert the factors to outcome classes taking values 0 and 1.
+final_glm_n <- as.numeric(final_glm)-1
+final_loess_n <- as.numeric(final_loess)-1
+final_rpart_n <- as.numeric(final_rpart)-1
+final_rf_n <- as.numeric(final_rf)-1
+final_gbm_n<- as.numeric(final_gbm)-1
+
+# create an ensemble prediction based on majority vote
+ensemble <- (final_glm_n + final_loess_n + final_rpart_n + final_rf_n + final_gbm_n)/5
+final_ensemble <- ifelse(ensemble>0.5, 1, 0)
+# assess accuracy
+acc_final_ensemble <- mean(final_ensemble == final_holdout$Class)
+final_miss_ens <- which(final_ensemble != factor(final_holdout$Class)) # which scans (row indices) were misclassified by ensemble
+set.seed(1)
+final_hits_ens <- sample(which(final_ensemble == factor(final_holdout$Class)), 9) # which scans were correctly classified
+
+#compare accuracies
+acc_final_compare <- data.frame(Model = c("kNN", "GLM", "Loess", "Class. tree", "Random forest", "GBM", "Ensemble"), Accuracy = c(acc_final_knn, acc_final_glm, acc_final_loess, acc_final_rpart, acc_final_rf, acc_final_gbm, acc_final_ensemble))
+
+acc_final_compare %>% knitr::kable(caption = "\\textit{Comparison of the accuracies of different models during validation}")
+
+# which and what proportion of misclassified cases from the ensemble-integrated models are correctly predicted by kNN
+final_knn_vs_other <- 1 -  mean(union(union(union(union(final_miss_glm, final_miss_loess), final_miss_rpart),final_miss_rf),final_miss_gbm) %in% final_miss_knn)
+```
+As can be seen in Table 4, the ensemble method yielded an accuracy of `r round(100*acc_final_ensemble, 1)`%, performing equivalently to the Loess, random forest and GBM methods, as observed during training (*cf.* Table 3). Fig. 7 shows the mapping of the model predictions and Fig. 8 shows the same for the ensemble method. The accuracy was approximately within the stochastic range from the initial training accuracy, suggesting that we did not overtrain the model. The kNN model correctly predicted `r round(100*final_knn_vs_other, 1)`% of the missed calls from the other models, a lower ratio than during training.
+```{r Final-models, echo=FALSE, message=FALSE, warning=FALSE, fig.cap='Prediction accuracy of the six examined models in the validation set, projected onto a Dissimilarity vs. Energy plot. Failed predictions in red ("miss").'}
+# visualize the correct and missed predicitons in each model
+final_holdout %>% select(Class, Energy, Dissimilarity) %>% 
+  mutate(kNN = final_knn, GLM = final_glm, Loess = final_loess, Class.Tree = final_rpart, Random.Forest = final_rf, Grad.Boost.Machine = final_gbm) %>% 
+  pivot_longer(-c(Class, Energy, Dissimilarity), values_to="Prediction", names_to="ML_model") %>%
+  mutate(acc = ifelse(Prediction!= factor(Class), 1, 0), ML_model = factor(ML_model, levels=c("kNN", "GLM", "Loess", "Class.Tree", "Random.Forest", "Grad.Boost.Machine"))) %>% 
+  ggplot(aes(Energy, Dissimilarity, shape = factor(Class, labels=c("normal","tumor")), color=factor(acc, labels=c("hit","miss")), size=factor(acc))) +
+  geom_point(alpha=0.5)+
+  scale_y_continuous(trans="log2")+
+  scale_color_manual(values = c("#2e8b57", "red"))+
+  scale_size_manual(values = c(2,4))+
+  facet_wrap("ML_model", nrow=2, ncol=3)+
+  guides(color=guide_legend(title="prediction"), shape=guide_legend(title="True outcome"), size=FALSE)
+
+```
+
+```{r Final-ensembl, echo=FALSE, message=FALSE, warning=FALSE, out.height='30%', fig.cap='Prediction accuracy of the Ensemble model in the validation set, projected onto a Dissimilarity vs. Energy plot. Failed predictions in red ("miss").'}
+# visualizing ensemble performance
+final_holdout %>% mutate(acc = ifelse(final_ensemble!= final_holdout$Class, 1, 0)) %>% ggplot(aes(Energy, Dissimilarity, shape = factor(Class, labels=c("normal","tumor")), color=factor(acc, labels=c("hit","miss")), size=factor(acc))) +
+  geom_point(alpha=0.5)+  
+  scale_color_manual(values = c("#2e8b57", "red"))+
+  scale_size_manual(values = c(2,4))+
+  ggtitle("Ensemble in validation set")+
+  scale_y_continuous(trans="log2")+
+  guides(color=guide_legend(title="prediction"), shape=guide_legend(title="True outcome"), size=FALSE)+
+    theme(plot.title = element_text(hjust=0.5, size=12))
+```
+
+Finally, we visualized those nine MRI scans that were misclassified by the ensemble method during both training and validation (Fig. 9) and a selection of random MRI scans there were correctly classified (Fig. 10). It seems evident, that misclassified images contain sections from more anatomically superior and inferior slices of the brain that are potentially harder to classify correctly as they cover less area.
+
+```{r Scans-misclass, echo=FALSE, message=FALSE, warning=FALSE, fig.dim= c(6,3), fig.cap='Combination of all MRI scans that were misclassified by the ensemble-model during training plus during validation. Correct class is displayed.'}
+##### STEP 8: MRI SCAN EVALUATION #####
+
+# visualizing the misclassified MRI scan images. We construct a function that takes the vector with the row indices of missed calls and the data set as input, and then loops through the row indices to fetch the corresponding brain scan images.
+# Letters signify the true class, T for "tumor" or "1" and N for "normal" or "0"
+plot_misses <- function(x, y) {
+par(mar = c(0, 0, 1, 0), xpd=TRUE, mfrow = c(3,3))
+for (i in x) {
+ # cat(paste0("Row index ", i, ", ", (y$Image[i]), " "))
+  img_miss <- jpeg::readJPEG(paste0("data/brain-tumor/Brain Tumor/",y$Image[i],".jpg"))
+  title <-y$Image[i]
+plot(as.raster(img_miss))
+title(main=title)
+text(x=25, y=30, ifelse(y$Class[i] == 1, "T", "N"), cex=3, 
+     col= ifelse(y$Class[i] == 1, "red", "#2e8b57"))
+# assign(paste0("img_miss_", i), recordPlot())
+}}
+
+plot_misses(final_miss_ens, final_holdout)
+
+# add the three misclassified images from training ensemble to the remaining par(mrow) slots with this function
+plot_misses_compl <- function(x, y) {
+for (i in x) {
+ # cat(paste0("Row index ", i, ", ", (y$Image[i]), " "))
+  img_miss <- jpeg::readJPEG(paste0("data/brain-tumor/Brain Tumor/",y$Image[i],".jpg"))
+  title <-y$Image[i]
+plot(as.raster(img_miss))
+title(main=title)
+text(x=25, y=30, ifelse(y$Class[i] == 1, "T", "N"), cex=3, 
+     col= ifelse(y$Class[i] == 1, "red", "#2e8b57"))
+# assign(paste0("img_miss_", i), recordPlot())
+}}
+
+plot_misses_compl(miss_ens, test)
+
+```
+
+```{r Scans-corrclass, fig.dim=c(6,3), echo=FALSE, message=FALSE, warning=FALSE, fig.cap='Randomly selected MRI scans that were correctly classified by the ensemble-model in validation.'}
+# visualizing randomly selected, correctly classified images. Again, a function taking the hits vector and the data set as input.
+# Letters signify the true class, T for "tumor" or "1" and N for "normal" or "0"
+
+plot_hits <- function(x, y) {
+par(mar = c(0, 0, 1, 0), xpd=TRUE, mfrow = c(3,3))
+  for (i in x) {
+  #  cat(paste0("Row index ", i, ", ", (y$Image[i]), " "))
+    img_miss <- jpeg::readJPEG(paste0("data/brain-tumor/Brain Tumor/",y$Image[i],".jpg"))
+    title <-y$Image[i]
+    plot(as.raster(img_miss))
+    title(main=title)
+  text(x=25, y=30, ifelse(y$Class[i] == 1, "T", "N"), cex=3, 
+       col= ifelse(y$Class[i] == 1, "red", "#2e8b57"))
+  #assign(paste0("img_hit_", i), recordPlot())
+  }}
+
+plot_hits(final_hits_ens, final_holdout)
+```
+When we look at the scan images more closely, it becomes apparent that they are organized in sequences of transverse sections from the same patients' MRI results. We examined images that seem to be the matching scans to Images 3063 and 3064 (misclassified, Fig. 9), from the more inferior areas of the same brain (Fig. 11). All but the most inferior were assigned to be tumor-infiltrated as ground truth.
+
+There is obviously additional information about the spatial relationship between the sections that can help improve the prediction algorithm by assigning weighted probabilities depending on how adjacent sections have been classified and how close they are to the section in question. If, for instance, multiple sections in a row were classified as tumor-infiltrated, then the probability that the immediately adjacent section will also contain tumorous tissue would increase. The appropriate annotation to implement such an approach was not available for this dataset, however.
+```{r Scan-sequence, echo=FALSE, message=FALSE, warning=FALSE, fig.dim= c(6,3), fig.cap='Images from an MRI slices stack'}
+# plot a presumable sequence of brain slices from same individual that include two of the failed predictions
+brain_tumor <- "data/brain-tumor/Brain Tumor.csv"
+bt <- read.csv2(file=brain_tumor, sep=",", dec=".")
+img <- paste0("Image",3056:3064)
+
+# Letters signify the true class, T for "tumor" or "1" and N for "normal" or "0"
+  par(mar=c(0,0,1,0), mfrow = c(3,4), xpd=TRUE)
+  for (i in img) {
+    image <- jpeg::readJPEG(paste0("data/brain-tumor/Brain Tumor/",i,".jpg"))
+    title <- i
+    plot(as.raster(image))
+    title(main=title)
+    text(x=25, y=30, ifelse(bt$Class[which(bt$Image==i)] == 1, "T", "N"), cex=3, col= ifelse(bt$Class[which(bt$Image==i)] == 1, "red", "#2e8b57"))
+  }
+```
+
+```{r Knn-2var, echo=FALSE, message=FALSE, warning=FALSE}
+set.seed(1995)
+#training a kNN model with inly two input variables
+dev_knn2 <- train(factor(Class) ~  Energy + Dissimilarity, data = dev, method="knn", tuneGrid = data.frame(k=5), trControl=trainControl(method="cv", number=10))
+
+final_knn2 <- predict(dev_knn2, newdata=final_holdout)
+acc_final_knn2 <- mean(final_knn2 == factor(final_holdout$Class)) # accuracy of updated kNN model
+```
+## DISCUSSION AND CONCLUSION
+Harnessing the power of image feature extraction by GLCM enabled us to train a model that was highly accurate in distinguishing between normal and tumorous brain tissues in MRI scans. A drawback is that all scanned brains were from tumor patients. An additional cohort of MRI scans from healthy individuals would provide a background against which the diagnosis of a tumor by machine learning could be ascertained.
+
+The kNN model performed much worse than other commonly used models. This is due to the curse of dimensionality [@rafalab] and accordingly, reducing the number of features to just two (Energy and Dissimilarity) markedly improves accuracy to `r round(100*acc_final_knn2, 1)`%.
+The Loess, random forest and GBM models performed with the same accuracy as the ensemble during both training and validation. Training and tuning Loess was much more computationally expensive and therefore future endeavors should prioritize random forests or the even faster GBM model. The ensemble method did not seem to have drawbacks and should be used to increase robustness against outliers and possibly include a kNN model trained with an appropriate amount of predictor variables.
+
+Accuracy could likely be improved even further if scan images were assigned to individuals. This would allow to use the spatial relationship between images of the same brain and to add a subsequent re-evaluation step using conditional probabilities based on the classification of adjacent slices. 
+The consideration of the four different MRI modalities that were used to generate the images might also increase the confidence of classification.
+
+Lastly, this project is just a step stone to developing a brain tumor segmentation algorithm that identifies the precise areas of a tumor and differentiates between tumor tissue types.   
+
+\newpage
+## SESSION INFO
+```{r Session-info, echo=FALSE, warning=FALSE, message=FALSE}
+sessionInfo()
+```
+
+\newpage
+## REFERENCES
