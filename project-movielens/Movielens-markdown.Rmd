@@ -1,7 +1,7 @@
 ---
 title: "MovieLens rating prediction model - HarvardX Data science Capstone assignment #1"
 author: "edX learner DBel_17"
-date: "April 26th, 2023"
+date: "April 28th, 2023"
 output:
   pdf_document: 
   keep_tex: yes
@@ -47,6 +47,7 @@ if(!require(tinytex)) install.packages("tinytex", repos = "http://cran.us.r-proj
 if(!require(tinytex)) tinytex::install_tinytex()
 if(!require(float)) install.packages("float", repos = "http://cran.us.r-project.org")
 if(!require(tibble)) install.packages("tibble", repos = "http://cran.us.r-project.org")
+if(!require(magick)) install.packages("magick", repos = "http://cran.us.r-project.org") # magick seems to be required on some machines to knit properly
 ```
 
 ## INTRODUCTION
@@ -383,20 +384,36 @@ grid.arrange(p3, p4, nrow=1)
 ```
 
 Interestingly, the average ratings per user are very favorable, with `r percent(mean(temp$avg_user_rating >= global_mean), accuracy=0.1)` of users rating above $\mu$ on average (Fig. 3, left). We might therefore be able to identify the smaller subset of users that are more critical of movies in general and account for their demanding taste, but also those who particularly enjoy movies on average. Half of the users have submitted more than 50 ratings (Fig. 3, right). This implies that we might be able to make robust predictions for most of individual user's tendencies.  
-At last, we looked at how users' average rating relates to the amount of ratings they have delivered at the top and bottom 15% of the rating distribution
+At last, we looked at how users' average rating relates to the amount of ratings they have delivered.
 
-```{r User-behaviour, fig.cap='User activity vs. average user rating', fig.align='center',  out.width='60%', echo=FALSE, warning=FALSE, message=FALSE}
-quants <- quantile(temp$avg_user_rating, probs = c(0.15, 0.85))
+```{r User-behaviour, fig.cap='User activity vs. average user rating. Whiskers as 1.0 x IQR. Blue line highlights the global mean.', fig.align='center',  out.width='60%', echo=FALSE, warning=FALSE, message=FALSE}
+# this is an alternative plot, but only informative at the outer ranges.
+# quants <- quantile(temp$avg_user_rating, probs = c(0.15, 0.85))
 
-p5 <- temp %>% filter(avg_user_rating < quants[1] | avg_user_rating > quants[2]) %>% 
-  ggplot(aes(avg_user_rating, sqrt(n), color=sqrt(n)))+
-  geom_point(aes(size=n), alpha=0.2)+
-  scale_color_gradient(low="darkblue", high="magenta")+
-  xlab("Average user rating")+
-  ylab("Sqrt(number (n) of ratings per user)")+
+#p5 <- temp %>% filter(avg_user_rating < quants[1] | avg_user_rating > quants[2]) %>% 
+#  ggplot(aes(avg_user_rating, sqrt(n), color=sqrt(n)))+
+#  geom_point(aes(size=n), alpha=0.2)+
+#  scale_color_gradient(low="darkblue", high="magenta")+
+#  xlab("Average user rating")+
+#  ylab("Sqrt(number (n) of ratings per user)")+
+#  ggtitle("Number of ratings per user vs. average rating per user")+
+#  theme(plot.title = element_text(hjust=0.5))
+# p5
+
+
+discr <- temp %>% mutate(avg_user_rating_disr = round(avg_user_rating*2)/2)
+
+p5b <- discr %>%
+  ggplot(aes(factor(avg_user_rating_disr), sqrt(n)))+
+  geom_boxplot(outlier.size = 0.3, coef=1)+
+  geom_vline(xintercept=2*global_mean, color = "blue")+
+  xlab("Average rating per user (rounded)")+
+  ylab("Sqrt(number of ratings per user)")+
   ggtitle("Number of ratings per user vs. average rating per user")+
+  scale_y_continuous(trans="log2")+
   theme(plot.title = element_text(hjust=0.5))
-p5
+p5b
+
 ```
 
 
