@@ -1,1 +1,1 @@
-Data Science Capstone
+This repository contains my submissions for the HarvardX PH125.9x "Data Science: Capstone" course assignments within the Data Science "Professional Certificate" edX program.
