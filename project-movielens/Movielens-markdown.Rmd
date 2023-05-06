@@ -1,9 +1,10 @@
 ---
 title: "MovieLens rating prediction model - HarvardX Data science Capstone assignment #1"
 author: "edX learner DBel_17"
-date: "April 28th, 2023"
+date: \today
 output:
   pdf_document: 
+    number_sections: true
   keep_tex: yes
 header-includes:
   - \usepackage{float}
@@ -50,7 +51,7 @@ if(!require(tibble)) install.packages("tibble", repos = "http://cran.us.r-projec
 if(!require(magick)) install.packages("magick", repos = "http://cran.us.r-project.org") # magick seems to be required on some machines to knit properly
 ```
 
-## INTRODUCTION
+# INTRODUCTION
 
 MovieLens is an extensive data set containing movie ratings submitted by users of the MovieLens website and curated by the GroupLens research lab, available through <http://grouplens.org>. MovieLens data is a popular resource for training machine learning algorithms to devise recommendation systems. In fact, participants of the MovieLens platform can receive movie recommendations based on the ratings they have provided. Recommendation systems are important tools for streaming and video rental services to keep their users engaged and committed to continued subscription. Thus, company profits depend on robustly performing algorithms which provide users with movie suggestions according to their preferences.
 
@@ -152,9 +153,9 @@ cat("Rating score options: ", scores,".")
 In order to build a linear prediction model, we implemented a strategy which begins by assessing the data distribution of individual features in relation to the ratings and then estimates individual effects incrementally. We started by accounting for movie- and user-specific effects and extended this basic model by reducing residual errors through the consideration of further predictors, such as genre, year of release or the rating frequency for each movie. Finally, the elaborated model was tested using the provided validation data set.
 
 \newpage
-## METHODS
+# METHODS
 
-### Data partitioning  
+## Data partitioning  
 
 To independently validate our model, we partitioned the initial "edx" training data set into a further training and test set, using a 80/20 partition.
 ```{r edx-Partition, eval=FALSE, message=FALSE, include=FALSE}
@@ -184,7 +185,7 @@ rm(edx, final_holdout_test)
 
 rm(test_index, temp, removed)
 ```
-### Data cleaning and processing
+## Data cleaning and processing
 
 The *title* column contains both the movie title and the year of release. The year was extracted using the regex pattern "\\(\\d{4}\\)$" in conjunction with parse_number(). This ensures that only four digit numbers in parentheses and at the end of the string were extracted, since by experience, there are movie titles like "1984" or "2001: A Space Odyssey". The title was tidied by using the pattern "\\s\\(\\d{4}\\)\$" and str_replace().
 
@@ -200,15 +201,15 @@ with $f_{i}$ the annual rating frequency for movie $i$, $S_{i}$ the amount of ra
 \end{center}
 
 
-### Data exploration and visualization
+## Data exploration and visualization
 
 Graphs were generated using the *ggplot2* or *base* R packages. Histograms, box plots, scatter plots and smooth curves were preferred tools to examine the relationship between features and outcomes as well as features and residuals.
 
-### Modeling approach
+## Modeling approach
 
-A linear prediction model was built by starting with one predictor, delineating its effect and then taking the remaining residual error $\epsilon$ and using the next predictor to explain a share of it. As a figure of reference, first, a global mean estimate $\hat{mu}$ was calculated by averaging all ratings for a given movie and then averaging the average ratings of all movies:
+A linear prediction model was built by starting with one predictor, delineating its effect and then taking the remaining residual error $\epsilon$ and using the next predictor to explain a share of it. As a figure of reference, first, a global mean estimate $\hat\mu$ was calculated by averaging all ratings for a given movie and then averaging the average ratings of all movies:
 
-\begin{center} $\hat{\mu} = \frac{1}{N}\sum_{i=1}^N\bar{R_{i}}$ 
+\begin{center} $\hat{\mu} = \frac{1}{N}\sum_{i=1}^N\bar{R_{i}}$
 
 with $\bar{R_{i}}$ being the average rating of a movie $i$ and $N$ the number of movies contained in the training data. \end{center}
 ```{r Global-mean, message=FALSE, include=FALSE}
@@ -265,7 +266,7 @@ The final model is a linear model with several loess-estimated effects:
 with $u_{j}$  the user-specific effect for user $j$, $a_{i}$ the loess estimate for the effect of the annual rating rate for movie $i$, $y_{i}$ the loess estimate of the release year effect for movie $i$, $d_{w}$ the loess estimate of the rating date effect for week $w$, $g_{j,i}$ the composite effect of user's {j} preference for movie's {i} genre categorization, and  $\epsilon_{i,j}$ the remaining residual error for movie $i$ and user $j$. \end{center}
 
 
-### Assessing model performance
+## Assessing model performance
 
 We used the root mean squared error (RMSE) as the loss function to quantify the remaining residuals and assess the performance of the estimates on the test set, and at very last on the final holdout validation test set.
 ```{r RMSE, include=FALSE}
@@ -274,14 +275,14 @@ RMSE <- function(true_r, predicted_r){
 }
 ```
 
-### Data clipping
+## Data clipping
 
 Ratings take discrete values in *0.5* intervals. The numeric range of our continuous rating predictions is not restrained, however. Therefore, final prediction values were capped and the optimal capping floor and ceiling values in the range of the observed rating scores were computed using the loss function.
 
 \newpage
-## RESULTS
+# RESULTS
 
-### Estimation of movie effect
+## Estimation of movie effect
 Since the quality of a movie should have the largest effect on its rating, we first decided to derive a measure of how a movie, the subject of the rating, influences the review score. Na$\"\i$vely put, are there movie effects? We examined the ratings distribution after averaging the ratings for each movie.  
 
 ```{r Movie-ratings, fig.cap='Movie statistics', results='asis', out.height='30%', echo=FALSE, warning=FALSE, message=FALSE}
@@ -304,7 +305,7 @@ p2 <- temp %>%
   ggplot(aes(sqrt(n)))+
   geom_histogram()+
   geom_vline(aes(xintercept=median(sqrt(n))), color = "blue")+
-  geom_text(aes(x=40, y=3400, label=paste0("Median = ",signif(median(sqrt(n)),digits=3))), size=3, color="blue")+
+  geom_text(aes(x=40, y=3400, label=paste0("Median = ",signif(median(n),digits=3))), size=3, color="blue")+
   xlab("Sqrt(ratings per movie)")+
   ylab("Count")+
   ggtitle("Number of ratings per movie")+
@@ -315,9 +316,9 @@ grid.arrange(p1, p2, nrow =1)
 ```
 
 
-Movie ratings show a slightly skewed, right-sided distribution, with `r percent (mean(temp$avg_rating >= global_mean), accuracy=0.1)` of all movie ratings scoring above overall average rating (Fig. 1, left). It is also obvious that most of the movies received less than 10 ratings (Fig. 1, right). Therefore estimating their average rating from the opinion of only a few users might not be very robust. Regularization was applied to introduce a penalty for low amount of ratings.
+Movie ratings show a slightly skewed, right-sided distribution, with `r percent (mean(temp$avg_rating >= global_mean), accuracy=0.1)` of all movie ratings scoring above overall average rating (Fig. 1, left). It is also obvious that 50% of the movies received less than `r median(temp$n)` and 25% received less than `r quantile(temp$n)[2]` ratings (Fig. 1, right). Estimating the average movie rating from the opinion of only a few users might not be very robust. Regularization was applied to introduce a penalty for low amount of ratings.
 We started building our model by accounting for the movie effect $m_{i}$ for movie $i$:
-\begin{center} $\bar{R_{i}} = \mu + m_{i} + \epsilon_{i,j}$, with average movie rating $\bar{R_{i}}$ and global mean $\mu$, \end{center}
+\begin{center} $\bar{R_{i}} = \hat\mu + \hat{m}_{i}$, with average movie rating $\bar{R_{i}}$ and global mean estimate $\hat\mu$. \end{center}
 
 and calculated $\hat{m}_{i}$ by simply subtracting $\hat{\mu}$ from $\bar{R_{i}}$. We also defined a tuning parameter $\lambda$ to penalize predictions of rarely reviewed movies and regularized the effect by the amount of reviews that a movie has received to avoid over- or underestimation of rarely rated movies. We probed a range of $\lambda$ and examined which value of $\lambda$  minimizes the RMSE of the prediction in the test set.  
 
@@ -351,7 +352,7 @@ global_mean_rmse <- RMSE(test$rating, global_mean)
 
 A $\lambda$ value of `r l[which.min(movie_rmses)]` was found to be optimal (Fig. 2). The RMSE obtained when using $\mu$ as the sole predictor dropped from `r signif(global_mean_rmse, digits= 5)` to `r signif(movie_rmse, digits=5)` by `r signif(global_mean_rmse - min(movie_rmses), digits=3)` when accounting for movie-specific effects.
 
-### Estimation of user effect
+## Estimation of user effect
 Next, we considered the effects of subjective rating based on user identity. How does the perception of the individual influence their judgement? We obtained the distributions of the users' average ratings and the amount of ratings each user has submitted.
 
 ```{r User-ratings, fig.cap='User statistics', fig.align='center',  out.height='30%', echo=FALSE, return='asis', warning=FALSE, message=FALSE}
@@ -422,7 +423,8 @@ We are expanding our model by a user effect $u_{j}$ for user $j$:
 
 \begin{center} $R_{i,j} = \mu + m_{i} + u_{j} + \epsilon_{i,j}$ \end{center}  
 Our estimate for $u_{j}$ is therefore:
-\begin{center} $ \hat{u}_{j}= R_{i,j} - \hat{\mu} - \hat{m}_{i} $ \end{center}  
+\begin{center} $ \hat{u}_{j}= \frac{1}{I_{j}}\sum_{i=1}^{I_{j}}R_{i,j} - \hat{\mu} - \hat{m}_{i} $, with $I_{j}$ being the number of movies user $j$ has rated.
+\end{center}  
 Further we regularize the effect by the amount of reviews that this user has contributed to the train set.
 
 ```{r User-effect-Regul, fig.cap='User effect regularization', fig.align='center',  out.height='25%',echo=FALSE, results='asis', warning=FALSE}
@@ -457,7 +459,7 @@ user_movie_rmse <- RMSE(test$rating, (global_mean + test$m_i + test$u_j))
 A $\lambda$ value of `r l[which.min(user_movie_rmses)]` was found to be optimal (Fig. 5). The RMSE dropped from `r signif(movie_rmse, digits= 5)` to `r signif(user_movie_rmse, digits=5)` by `r signif(movie_rmse - user_movie_rmse, digits=3)` when adding user- to the
 movie-specific effects.
 
-### Annual rating rate effect  
+## Annual rating rate effect  
 To explain residual error after estimating movie and user effects, we computed how many ratings each movie has received per year (year after last rating date minus release year), and divided the resulting annual rating rate by the size of the training database, i.e. the total amount of reviews (we called this feature $f_{i}$, see Methods/Data cleaning section). The measure of how often a movie is rated allows the extrapolation to how often it is being watched and therefore how popular it is, as well as how reliable the ratings are (considering the central limit theorem).
 
 ```{r Rating-rate, fig.cap='Residuals vs. annual rating rate', fig.align='center', out.width='60%', echo=FALSE, results='asis', message=FALSE, warning=FALSE}
@@ -586,7 +588,7 @@ rating_pa_user_movie_rmse <- RMSE(test$rating, (global_mean + test$rate_pa_i + t
 
 We applied the loess() function to estimate the effect $a_{i}$ for the nearest integer of $f_{i}$, using an optimal span of 0.2. Since low rating rates correlated with positive residuals, regularization was not effective here. Assigning the effect estimate $\hat{a}_{i}$ to each movie $i$ resulted in a RMSE of `r signif(rating_pa_user_movie_rmse, digits=5)`, a further improvement by `r format(user_movie_rmse - rating_pa_user_movie_rmse, scientific=FALSE, digits=2)` over the movie-user model.
 
-### Genre effect
+## Genre effect
 
 We continued by examining if the updated residuals (after accounting for movie, user and rating frequency effects) could be explained by genre. At first, we filtered for those movies that have only one genre assigned. This allowed us to avoid the genre assignment ambiguities of many of the entries and explore if unambiguous, singular genre assignments have an influence on the residual errors. 
 ```{r Genre-single, fig.cap='Residuals vs. definite genre assignments', fig.align='center', out.width='75%', echo=FALSE, results='asis', message=FALSE, warning=FALSE}
@@ -792,7 +794,7 @@ train <- avg_mov_rating %>% select(movieId, g_i)  %>% right_join(train, by="movi
 A $\lambda$ value of `r l[which.min(genre_regul)]` was found to be optimal (Fig. 10). The RMSE dropped from `r signif(rating_pa_user_movie_rmse, digits= 5)` to `r signif(mov_user_ratepa_genre_model_rmse, digits=5)` by `r format(rating_pa_user_movie_rmse - mov_user_ratepa_genre_model_rmse, scientific=FALSE, digits=2)` when accounting for movie, user, rating frequency and now movie genre effects.
 
 
-### Year of release effect
+## Year of release effect
 
 Next, we checked if there is any correlation between the year of release and the remaining average residuals per movie. We therefore plotted the residuals against year of release.  
 ```{r Year-release, fig.cap='Residuals vs. year of release', fig.align='center', out.width='65%', echo=FALSE, results='asis', message=FALSE, warning=FALSE}
@@ -889,7 +891,7 @@ mov_user_ratepa_genre_year_model_rmse <- RMSE(test$rating, (global_mean + test$g
 ```
 By estimating the year effect with the loess() function using a span of 0.16 and an optimal $\lambda$ of  `r l[which.min(year_reg_model_rmses)]` (Fig. 12), the updated model yielded a RMSE of `r signif(mov_user_ratepa_genre_year_model_rmse, digits=5)`, which is a further, modest improvement by `r format(mov_user_ratepa_genre_model_rmse - mov_user_ratepa_genre_year_model_rmse, scientific=FALSE, digits=1)` over the previous model increment. 
 
-### Date of rating
+## Date of rating
 
 Next, we examined if the time of review affected the rating submitted. To explain such effects, one possibility would be that over time users became more critical of movies and overall ratings declined or that sentiment trend was influenced in some other way. We rounded the dates to weeks to limit the number of time points to a reasonable number.
 
@@ -998,7 +1000,7 @@ test <- test %>% mutate(rowId= rownames(.))
 ```
 We could improve the RMSE to `r signif(revdate_year_genre_mov_user_ratepa_model_rmse, digits=5)` by `r format(mov_user_ratepa_genre_year_model_rmse - revdate_year_genre_mov_user_ratepa_model_rmse, scientific=FALSE, digits=2)` .
 
-### User/genre interaction effect
+## User/genre interaction effect
 
 Lastly, we considered if the remaining residuals could be reduced by accounting for individual user's preferences for certain genres. We obtained the residuals and calculated the average residuals per user and per genre. For demonstration purposes we plotted the residuals for five users, that have contributed over 1000 ratings to our training data set against genre categories (Fig. 14). User "58357", for instance, seems to have relative antipathy against Documentaries, Film-Noir or Western movies, while user "42791", in contrast, is more in favor of these genres. It therefore seemed reasonable to identify and factor in these biases.
 <!-- Computationally intensive chunk, therefore eval=FALSE ! Values are provided in next chunk to generate regularization plot. Effect estimates g_jk and g_ij are downloaded from GitHub URLs to calculate RMSE and model performance on test and final holdout test.
@@ -1161,10 +1163,10 @@ temp %>% ggplot(aes(x=genre, y=residual, group=userId, color=factor(userId)))+
 We took the averaged users' residuals $\hat{g}_{j,k}$ and then averaged these over the genres of each rated movie in the training set to obtain the effect estimate $\hat{g}_{j,i}$. Regularization by the amount of submitted ratings per user improved the RMSE at an optimal tuning parameter $\lambda$ of 20 (Fig. 15). 
 
 ```{r Genre-user-regul, fig.cap='Regularization of genre-user effects', fig.align='center', out.height='25%',echo=FALSE, message=FALSE, warning=FALSE}
-df <- data.frame(userxgene_rmses=c(0.8523471, 0.8506877, 0.8503473, 0.8503779, 0.8505495, 0.8507806, 0.8510362, 0.8512996, 0.8515626, 0.8518207, 0.8520716), l=seq(0,100,10))
+df <- data.frame(userxgenre_rmses=c(0.8523471, 0.8506877, 0.8503473, 0.8503779, 0.8505495, 0.8507806, 0.8510362, 0.8512996, 0.8515626, 0.8518207, 0.8520716), l=seq(0,100,10))
 
 par(mar=c(3,3,0.5,0.5))
-plot(df$l, df$userxgene_rmses, xlab= "lambda", ylab="RMSE", mgp=c(1.7,0.5,0))
+plot(df$l, df$userxgenre_rmses, xlab= "lambda", ylab="RMSE", mgp=c(1.7,0.5,0))
 
 dl2 <- "coeff/train_genre_user_effect.rds"
 if(!file.exists(dl2))
@@ -1192,7 +1194,7 @@ Thus, our final model is:
 \begin{center}$R_{i,j} = \mu + m_{i} + u_{j} + a_{i} + g_{i} + y_{i} + d_{w} + g_{j,i} +\epsilon_{i,j}$ \end{center} 
 
 
-### Last model tuning  
+## Last model tuning  
 We then looked at the distribution of our finalized predictions against the true ratings to visually evaluate the utility of the current model (Fig. 16).
 
 ```{r True-vs-predicted, fig.cap='Predicted vs. true ratings', fig.align='center', out.width='60%', echo=FALSE, results='asis', message=FALSE, warning=FALSE}
@@ -1295,7 +1297,7 @@ In summary, incremental addition of feature effect estimates to reduce residuals
 `r rmses_compare %>% knitr::kable(caption = "\\textit{Step-wise development of a linear, rating prediction model and the according RMSEs}")`
 
 
-### Performance on the final holdout test set
+## Performance on the final holdout test set
 
 At last, the performance of our prediction algorithm was assessed on the final holdout validation test after adding the computed feature effects.
 ```{r Final-holdout-effects, echo=FALSE, results='asis', message=FALSE, warning=FALSE}
@@ -1376,14 +1378,14 @@ evaluation <- RMSE(final_holdout_test$rating, final_holdout_test$final_r_hat)
 RMSE when applying final model and prediction capping to the final holdout validation set: **`r signif(evaluation, digits=5)`**.
 
 \newpage
-## CONCLUSION
+# CONCLUSION
 We have demonstrated that it is possible to devise a recommendation system based on *a priori* knowledge of users and their rating behavior. By generating a linear model through incremental reduction of residual errors, we achieved fairly high accuracy of our predicted ratings in a validation set, amounting to a RMSE of **`r signif(evaluation, digits=5)`**. Estimation of movie and user effects, followed by preferences of users for genres, had the largest share in reducing the loss, and these features might be preferentially considered when developing models on similar data sets. Accounting for variables such as year of release, movie genre, rating rate and rating date further improved our predictions, albeit rather modestly.
 By applying regularization, where warranted, we ensured to prevent overfitting of our model. Indeed, the RMSE when applying the model with regularization was virtually the same on our test set and the final holdout validation set.
 
 It is conceivable that the recommendation system can be improved further. We have not taken into account individual user preferences for certain movie characteristics other than genre. A matrix factorization approach could have utility in explaining preferences of specific users for certain movie types, such as artsy as opposed to blockbuster movies, or for particular actors. In addition, our prediction system only allows us to extrapolate to movies and users that were contained in our training data set. To build a recommendation system that can predict ratings of novel movies, it might be warranted to explore the power of movie title effects. Some movie titles might contain additional information. For instance, we know from experience that sequels are likely to do worse than the original pilot movies. On the other hand, users that had rated a pilot and its sequel movie highly, might want to watch the second sequel. Furthermore, a text mining language analysis of movie titles, by for instance sentiment analysis, could be used to train an algorithm by assessing if certain terms associate with better or worse ratings. This would allow for building a true recommendation system that can make a judgement based on genre and title of movies that have not been part of a training data set, but also incorporate known genre preferences of particular users.
 
 \newpage
-## SESSION INFORMATION
+# SESSION INFORMATION
 ```{r Session-Info, echo=FALSE, results='asis', message=FALSE, warning=FALSE}
 sessionInfo()
 ```

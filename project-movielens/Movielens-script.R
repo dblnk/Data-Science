@@ -143,7 +143,7 @@ p2 <- train %>% group_by(movieId) %>% summarize(n = n()) %>%
   ggplot(aes(sqrt(n)))+
   geom_histogram()+
   geom_vline(aes(xintercept=median(sqrt(n))), color = "blue")+
-  geom_text(aes(x=40, y=3000, label=paste0("Median = ",signif(median(sqrt(n)),digits=3))), color="blue")+
+  geom_text(aes(x=40, y=3000, label=paste0("Median = ",signif(median(n),digits=3))), color="blue")+
   xlab("Sqrt(ratings per movie)")+
   ylab("Count")+
   ggtitle("Number of ratings per movie")+
@@ -154,7 +154,8 @@ grid.arrange(p1, p2, nrow =1)
 pdf("figs/movie-ratings.pdf", width = 10, height = 6)
 grid.arrange(p1, p2, nrow =1)
 dev.off()
-# It is  obvious that most of the movies received less than 10 ratings. Therefore estimating their average rating from the opinion of only a few users might not be very robust.
+quantile(temp$n)
+# It is  obvious that half of the movies received less than about 100 ratings and 25% of movie less than about 25. Therefore estimating average ratings for a considerable proportion of movies from the opinion of only a few users might not be very robust.
 
 
 # Now, let's start building our model by adding a movie effect m_i for movie i consisting of its average rating minus the global mean and regularize the effect by the amount of reviews that a movie has received to avoid over- or underestimation of rarely rated movies. 
